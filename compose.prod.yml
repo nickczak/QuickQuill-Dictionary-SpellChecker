@@ -19,6 +19,9 @@ services:
     image: ${DOCKER_IMAGE_BACKEND:-nicksobchak/quickquill-backend}:${DOCKER_TAG:-latest}
     restart: unless-stopped
     network_mode: host
+    # e2-micro has ~1GB RAM: cap the container so the JVM sizes its heap to fit
+    # (without a limit the JVM ergonomically picks ~250MB heap and the box swaps).
+    mem_limit: 320m
     working_dir: /app
     volumes:
       # :z relabels the bind-mount to container_file_t so the container can read
