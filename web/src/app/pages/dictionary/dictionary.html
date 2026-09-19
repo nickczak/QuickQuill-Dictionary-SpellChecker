@@ -51,7 +51,7 @@
           >?
         </span>
       } @else {
-        <span>Word '{{ searchInput() }}' not found.</span>
+        <span>Word '{{ notFound()!.query }}' not found.</span>
       }
     </div>
   }
