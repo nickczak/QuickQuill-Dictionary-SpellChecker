@@ -53,7 +53,7 @@
               ]
             },
             "gh-pages": {
-              "baseHref": "/QuickQuill-Dictionary-SpellChecker/"
+              "baseHref": "/"
             },
             "development": {
               "optimization": false,

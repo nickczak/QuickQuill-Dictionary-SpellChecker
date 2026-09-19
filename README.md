@@ -5,7 +5,7 @@
   <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/ci.yml"><img src="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/ci.yml/badge.svg" alt="Build and Test"></a>
   <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/github-pages.yml"><img src="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/github-pages.yml/badge.svg" alt="Deploy"></a>
   <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/releases"><img src="https://img.shields.io/github/v/release/nickczak/QuickQuill-Dictionary-SpellChecker?color=purple&cachebust=1" alt="Release">
-  <a href="https://nickczak.github.io/QuickQuill-Dictionary-SpellChecker/"><img src="https://img.shields.io/badge/website-GitHub%20Pages-black" alt="Website"></a>
+  <a href="https://quickquill.ink"><img src="https://img.shields.io/badge/website-quickquill.ink-black" alt="Website"></a>
 </p>
 
 ---
@@ -111,7 +111,7 @@ The Spring Boot backend uses `studio/src/main/resources/application.properties`.
 spring.application.name=studio
 server.port=8080
 quickquill.dictionary-path=../dictionary.db
-quickquill.cors.allowed-origins=${CORS_ALLOWED_ORIGINS:https://nickczak.github.io}
+quickquill.cors.allowed-origins=${CORS_ALLOWED_ORIGINS:https://quickquill.ink}
 
 # PostgreSQL — override with DB_URL, DB_USERNAME, DB_PASSWORD
 spring.datasource.url=${DB_URL:jdbc:postgresql://localhost:5432/quickquill}
@@ -217,17 +217,30 @@ The app is split across two hosts: the **Spring Boot backend runs on Render** an
 ### Backend → Render
 
 1. In the Render dashboard (*New → Blueprint*), connect this repo. Render provisions the managed PostgreSQL database and the `quickquill-backend` web service from [`render.yaml`](render.yaml) and auto-redeploys on pushes to `main`.
-2. Copy down the service's public URL, e.g. `https://quickquill-backend-xxxx.onrender.com`. It is needed for the frontend (step 3 below).
-3. The blueprint sets `CORS_ALLOWED_ORIGINS=https://nickczak.github.io` so the GitHub Pages site may call the API. Using a custom domain for the frontend? Change this to your custom origin.
+2. Give the service a custom domain: in **Render → quickquill-backend → Settings → Custom Domains** add `api.quickquill.ink` (Render issues the TLS cert). Then add the DNS record below.
+3. The blueprint sets `CORS_ALLOWED_ORIGINS=https://quickquill.ink` so the frontend (served from that domain) may call the API.
 4. `dictionary.db` is committed to the repo and baked into the image (Render's free web instances have no persistent disk). To serve a larger dictionary, commit the bigger database and re-deploy.
 
-### Frontend → GitHub Pages
+### Frontend → GitHub Pages (custom domain)
 
-1. In **Settings → Pages**, set **Source** to *Deploy from a branch* and pick the `gh-pages` branch, root directory. The first deploy creates that branch.
-2. Set the repository variable `BACKEND_URL` (**Settings → Secrets and variables → Actions → Variables**) to your Render backend URL from step 2 above. This overrides the default in `web/src/environments/environment.prod.ts` without a code change.
-3. Push to `main` (or run the `Deploy Frontend to GitHub Pages` workflow manually). The app is published at `https://<user>.github.io/QuickQuill-Dictionary-SpellChecker/`.
+The site is published at **https://quickquill.ink**. The pieces that make it work:
 
-`environment.prod.ts`, `angular.json` (the `gh-pages` baseHref) and `web/public/404.html` (SPA deep-link fallback) make the static build work under the `/QuickQuill-Dictionary-SpellChecker/` sub-path.
+- `web/angular.json` — the `gh-pages` build config sets `baseHref: "/"` (the site lives at the domain root).
+- `web/public/CNAME` — `quickquill.ink`; copied into the published branch so GitHub knows the domain.
+- `web/public/404.html` — routes hard refreshes/deep links back into the SPA.
+- `web/src/environments/environment.prod.ts` + the `BACKEND_URL` repo variable — where the Angular app reaches the API (`api.quickquill.ink`).
+
+One-time setup:
+
+1. **DNS** at your registrar:
+   - `quickquill.ink` → **A** to GitHub Pages: `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
+   - `www.quickquill.ink` → **CNAME** `nickczak.github.io` (GitHub auto-redirects www → apex)
+   - `api.quickquill.ink` → **CNAME** `quickquill-backend-xxxx.onrender.com` (may require a TXT verification value from Render)
+2. In **GitHub → Settings → Pages**: set the Custom domain to `quickquill.ink`, save, and enable HTTPS enforcement once the certificate is issued.
+3. In **GitHub → Settings → Secrets and variables → Actions → Variables**: set `BACKEND_URL=https://api.quickquill.ink` (overrides the default in `environment.prod.ts`).
+4. Push to `main`; the GitHub Pages workflow builds and deploys, and Render redeploys the backend.
+
+> The `nickczak.github.io/QuickQuill-Dictionary-SpellChecker/` URL stops serving once the custom domain is configured — GitHub redirects it to `quickquill.ink`.
 
 ---
 

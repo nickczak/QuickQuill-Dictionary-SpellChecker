@@ -27,9 +27,9 @@
 #     reach the DB at boot ("Unable to determine Dialect"). Change both
 #     regions together if you take the app to another region.
 #   * CORS_ALLOWED_ORIGINS must be the exact browser origin of the site calling
-#     the API. For a project page under <user>.github.io that origin is
-#     https://<user>.github.io (no path). Add more origins as a comma-separated
-#     list if the frontend is also served from a custom domain.
+#     the API: https://quickquill.ink (the GitHub Pages custom domain). Add
+#     more origins as a comma-separated list if the frontend is also served
+#     from a second domain.
 
 services:
   - type: web
@@ -49,9 +49,11 @@ services:
         value: /app/dictionary.db
       - key: DB_SSLMODE
         value: require
-      # GitHub Pages origin that is allowed to call this backend.
+      # Frontend origin (GitHub Pages custom domain) allowed to call this backend.
+      # GitHub auto-redirects www.quickquill.ink to the apex, so only the apex
+      # is needed here.
       - key: CORS_ALLOWED_ORIGINS
-        value: https://nickczak.github.io
+        value: https://quickquill.ink
       # Render's connectionString is a non-JDBC postgres:// URL; it is the
       # single source of truth for host/port/database and is rewritten into a
       # JDBC URL by DataSourceUrlNormalizer (which drops the embedded
