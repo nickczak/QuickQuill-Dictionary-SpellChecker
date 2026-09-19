@@ -220,8 +220,9 @@ The app is split across two hosts: the **Spring Boot backend runs on Render** an
 1. In the Render dashboard (*New → Blueprint*), connect this repo. Render provisions the managed PostgreSQL database and the `quickquill-backend` web service from [`render.yaml`](render.yaml) and auto-redeploys on pushes to `main`.
 2. Give the service a custom domain: in **Render → quickquill-backend → Settings → Custom Domains** add `api.quickquill.ink` (Render issues the TLS cert). Then add the DNS record below.
 3. The blueprint sets `CORS_ALLOWED_ORIGINS=https://quickquill.ink` so the frontend (served from that domain) may call the API.
-4. The SQLite dictionary is **not** committed to the repo. It is published as the GitHub release asset `dictionary-common.db` and the Dockerfile downloads it during the build, verifies its SHA256, and bakes it into the image (Render's free web instances have no persistent disk). To serve a different dictionary, upload the new `.db` to a release and bump `DICTIONARY_DB_URL`/`DICTIONARY_DB_SHA256` in `Dockerfile`.
-5. For the **Backend Deploy** badge to reflect the real Render state, set the following in **GitHub → Settings → Secrets and variables → Actions**:
+4. The SQLite dictionary is **not** committed to the repo. It is published as the GitHub release asset `dictionary-common.db`; the Dockerfile downloads it during the build, verifies its SHA256, layers the custom QuickQuill entries on top via `scripts/import_extras.py`, and bakes the result into the image (Render's free web instances have no persistent disk). To serve a different dictionary, upload the new `.db` to a release and bump `DICTIONARY_DB_URL`/`DICTIONARY_DB_SHA256` in `Dockerfile`.
+5. Free web instances sleep after ~15 minutes without traffic. The blueprint provisions a `quickquill-keepalive` cron job (`keepalive/`) that pings `GET /api/health` every 10 minutes so the backend stays warm.
+6. For the **Backend Deploy** badge to reflect the real Render state, set the following in **GitHub → Settings → Secrets and variables → Actions**:
    - **Secret** `RENDER_API_KEY` — Render → Account Settings → API Keys
    - **Variable** `RENDER_SERVICE_ID` — the `quickquill-backend` service id (the `srv-...` in the service page URL)
 

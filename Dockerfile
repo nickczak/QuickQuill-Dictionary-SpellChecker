@@ -10,6 +10,8 @@
 # as GitHub release asset "dictionary-common.db" and pulled during the build,
 # then verified against a pinned SHA256. Bump DICTIONARY_DB_URL and
 # DICTIONARY_DB_SHA256 together when the database is updated.
+# Custom entries (QuickQuill, Nevermore Academy, ...) are added on top of the
+# downloaded dictionary by scripts/import_extras.py inside Stage 3.
 
 ARG DICTIONARY_DB_URL=https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/releases/download/dictionary-db-v1/dictionary-common.db
 ARG DICTIONARY_DB_SHA256=6c9958cd62311c863dcf362d1713950f75910c2f4f848dc1235c00708a7a7130
@@ -45,11 +47,16 @@ FROM debian:bookworm-slim AS dictionary-download
 ARG DICTIONARY_DB_URL
 ARG DICTIONARY_DB_SHA256
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl \
+  && apt-get install -y --no-install-recommends ca-certificates curl python3 \
   && rm -rf /var/lib/apt/lists/*
+# Verify the pristine release asset first, then layer the custom QuickQuill
+# entries on top so the baked dictionary also serves those words.
 RUN mkdir -p /out \
   && curl -fsSL "${DICTIONARY_DB_URL}" -o /out/dictionary.db \
   && echo "${DICTIONARY_DB_SHA256}  /out/dictionary.db" | sha256sum -c -
+COPY scripts/import_extras.py /out/import_extras.py
+RUN python3 /out/import_extras.py --db /out/dictionary.db \
+  && rm /out/import_extras.py
 
 ### Stage 4: backend runtime image
 FROM eclipse-temurin:25-jre AS backend
@@ -58,7 +65,8 @@ WORKDIR /app
 COPY --from=backend-build /src/build/libs/*.jar ./app.jar
 COPY --from=engine-build /src/engine/build/src/libquickquill_engine.so ./libquickquill_engine.so
 # dictionary.db is downloaded from a GitHub release asset (see the
-# dictionary-download stage above) and baked into the image, since Render's
+# dictionary-download stage above), enriched with the custom words from
+# scripts/import_extras.py, and baked into the image, since Render's
 # free web services have no persistent disk. It is NOT committed to the repo.
 COPY --from=dictionary-download /out/dictionary.db ./dictionary.db
 

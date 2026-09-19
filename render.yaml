@@ -21,9 +21,14 @@
 #     manual probing.
 #   * Free web instances have no persistent disk, so dictionary.db is baked
 #     into the image. It is NOT committed to the repo: the Dockerfile pulls it
-#     from the GitHub release asset "dictionary-common.db" at build time and
-#     verifies its SHA256 (see DICTIONARY_DB_URL / DICTIONARY_DB_SHA256 in
-#     the Dockerfile).
+#     from the GitHub release asset "dictionary-common.db" at build time,
+#     verifies its SHA256, and layers the custom entries from
+#     scripts/import_extras.py on top (see DICTIONARY_DB_URL /
+#     DICTIONARY_DB_SHA256 in the Dockerfile).
+#   * Free web instances sleep after ~15 min without traffic; the quickquill-
+#     keepalive cron job pings /api/health every 10 minutes so the backend
+#     stays warm. PING_URL is the custom domain api.quickquill.ink; keep it in
+#     sync if the domain changes.
 #   * The web service and the database are pinned to the SAME region (region:
 #     oregon). Render resolves a managed database's internal hostname only
 #     within its own region; a region mismatch shows up as Hikari failing to
@@ -74,6 +79,22 @@ services:
         fromDatabase:
           name: quickquill-db
           property: password
+
+  - type: cron
+    name: quickquill-keepalive
+    runtime: docker
+    repo: https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker
+    region: oregon
+    schedule: "*/10 * * * *"
+    dockerfilePath: ./keepalive/Dockerfile
+    dockerContext: ./keepalive
+    plan: free
+    envVars:
+      # Backend must be reachable over HTTPS from this cron job. The custom
+      # domain is used rather than the .onrender.com URL so this survives DNS
+      # changes on the Render service.
+      - key: PING_URL
+        value: https://api.quickquill.ink
 
 databases:
   - name: quickquill-db
