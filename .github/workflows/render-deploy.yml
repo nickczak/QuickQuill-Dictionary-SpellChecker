@@ -35,32 +35,35 @@ jobs:
           : "${RENDER_API_KEY:?Set the RENDER_API_KEY secret in GitHub → Settings → Secrets}"
           : "${RENDER_SERVICE_ID:?Set the RENDER_SERVICE_ID variable in GitHub → Settings → Variables}"
 
+          DEPLOY_STATUS=/tmp/deploy_status.txt
+
           for i in $(seq 1 80); do
-            status=$(curl -sSf \
+            curl -sSf \
               -H "Authorization: Bearer $RENDER_API_KEY" \
               "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys?limit=5" \
-              | COMMIT_SHA="$COMMIT_SHA" python3 -c '
-            import json, os, sys
-            sha = os.environ["COMMIT_SHA"]
-            deploys = json.load(sys.stdin)
-            for dep in deploys:
-                if dep.get("commit", {}).get("id") == sha:
-                    print(dep["status"])
-                    break
-            else:
-                print("not_found")
-          ')
+              | COMMIT_SHA="$COMMIT_SHA" python3 - > "$DEPLOY_STATUS" <<'PY'
+          import json, os, sys
+          sha = os.environ["COMMIT_SHA"]
+          deploys = json.load(sys.stdin)
+          for dep in deploys:
+              if dep.get("commit", {}).get("id") == sha:
+                  print(dep["status"])
+                  break
+          else:
+              print("not_found")
+          PY
 
+            status=$(cat "$DEPLOY_STATUS")
             echo "deploy status: $status"
 
             case "$status" in
-              live) echo "Render deploy succeeded"; exit 0 ;;
+              live)
+                echo "Render deploy succeeded"
+                exit 0
+                ;;
               deploy_cancelled|build_failed|update_failed|canceled)
                 echo "::error::Render deploy failed ($status)"
                 exit 1
-                ;;
-              not_found)
-                # Render has not registered the deploy for this commit yet; keep polling.
                 ;;
             esac
 
