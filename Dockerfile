@@ -5,6 +5,14 @@
 # builds this Dockerfile directly via render.yaml; the container listens on
 # :8080. The Angular frontend is not part of this image — it is served from
 # GitHub Pages (see .github/workflows/github-pages.yml).
+#
+# The dictionary itself is NOT committed to the repo (155MB): it is published
+# as GitHub release asset "dictionary-common.db" and pulled during the build,
+# then verified against a pinned SHA256. Bump DICTIONARY_DB_URL and
+# DICTIONARY_DB_SHA256 together when the database is updated.
+
+ARG DICTIONARY_DB_URL=https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/releases/download/dictionary-db-v1/dictionary-common.db
+ARG DICTIONARY_DB_SHA256=6c9958cd62311c863dcf362d1713950f75910c2f4f848dc1235c00708a7a7130
 
 ### Stage 1: C++ engine build
 FROM debian:bookworm-slim AS engine-build
@@ -32,16 +40,27 @@ COPY studio/ ./
 COPY --from=engine-build /src/engine/build/src/libquickquill_engine.so /src/engine/build/src/libquickquill_engine.so
 RUN ./gradlew bootJar
 
-### Stage 3: backend runtime image
+### Stage 3: download + verify the dictionary
+FROM debian:bookworm-slim AS dictionary-download
+ARG DICTIONARY_DB_URL
+ARG DICTIONARY_DB_SHA256
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl \
+  && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /out \
+  && curl -fsSL "${DICTIONARY_DB_URL}" -o /out/dictionary.db \
+  && echo "${DICTIONARY_DB_SHA256}  /out/dictionary.db" | sha256sum -c -
+
+### Stage 4: backend runtime image
 FROM eclipse-temurin:25-jre AS backend
 WORKDIR /app
 
 COPY --from=backend-build /src/build/libs/*.jar ./app.jar
 COPY --from=engine-build /src/engine/build/src/libquickquill_engine.so ./libquickquill_engine.so
-# dictionary.db is committed to the repo and baked into the image (Render's
-# free web services have no persistent disk). To serve a larger dictionary,
-# commit the bigger database and redeploy.
-COPY dictionary.db* ./
+# dictionary.db is downloaded from a GitHub release asset (see the
+# dictionary-download stage above) and baked into the image, since Render's
+# free web services have no persistent disk. It is NOT committed to the repo.
+COPY --from=dictionary-download /out/dictionary.db ./dictionary.db
 
 EXPOSE 8080
 ENV QUICKQUILL_DICTIONARY_PATH=/app/dictionary.db

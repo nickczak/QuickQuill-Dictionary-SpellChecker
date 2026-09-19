@@ -4,6 +4,8 @@ engine/build/
 studio/build/
 studio/.gradle/
 .dictionary.db
+*.db-shm
+*.db-wal
 .git
 .gitignore
 node_modules/
