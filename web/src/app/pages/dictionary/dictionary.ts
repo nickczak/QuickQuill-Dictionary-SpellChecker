@@ -26,6 +26,7 @@ export class Dictionary implements OnInit, OnDestroy {
   searchInput = signal('');
   result = signal<WordResponse | null>(null);
   notFound = signal<WordNotFound | null>(null);
+  notFoundQuery = signal('');
   error = signal<WordError | null>(null);
   isLoading = signal(false);
   statusMessage = signal('');
@@ -96,25 +97,29 @@ export class Dictionary implements OnInit, OnDestroy {
           this.isLoading.set(true);
           this.clearResult();
           return this.api.lookup(word).pipe(
+            map((response) => ({ response, word })),
             catchError((err) => {
               if (err instanceof HttpErrorResponse && err.status >= 200 && err.status < 600) {
-                return of(new HttpResponse({ body: err.error, status: err.status }));
+                return of({
+                  response: new HttpResponse({ body: err.error, status: err.status }),
+                  word,
+                });
               }
               this.statusMessage.set(`Network error: ${err.message || 'failed to fetch'}`);
               this.isLoading.set(false);
-              return of(null);
+              return of({ response: null, word });
             }),
           );
         }),
       )
-      .subscribe((response) => {
+      .subscribe(({ response, word }) => {
         if (!response) return;
-        const word = this.searchInput().trim();
         const status = response.status;
         const body = response.body!;
 
         if (status === 404) {
           this.notFound.set(body as WordNotFound);
+          this.notFoundQuery.set(word);
         } else if (status === 400) {
           this.error.set(body as WordError);
         } else if (status >= 200 && status < 300) {
@@ -152,6 +157,7 @@ export class Dictionary implements OnInit, OnDestroy {
   onInput(event: Event) {
     const value = (event.target as HTMLInputElement).value;
     this.searchInput.set(value);
+    this.ghostEpoch++;
 
     const trimmed = value.trim();
 
@@ -304,6 +310,7 @@ export class Dictionary implements OnInit, OnDestroy {
   private clearResult() {
     this.result.set(null);
     this.notFound.set(null);
+    this.notFoundQuery.set('');
     this.error.set(null);
     this.statusMessage.set('');
   }

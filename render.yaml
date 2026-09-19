@@ -45,7 +45,9 @@ services:
     runtime: docker
     repo: https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker
     region: oregon
-    autoDeploy: true
+    # Deploys are triggered and verified by .github/workflows/render-deploy.yml.
+    # Keeping this off prevents a push from creating a duplicate Render deploy.
+    autoDeploy: false
     dockerfilePath: ./Dockerfile
     dockerContext: .
     plan: free

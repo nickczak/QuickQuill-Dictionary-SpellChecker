@@ -8,11 +8,6 @@ name: Backend Deploy
 # A push superseded by a newer push is expected: GitHub cancels the older run
 # (concurrency group) and Render cancels the older deploy, so the newest run
 # owns the final status.
-#
-# Setup (one time):
-#   * Secret   RENDER_API_KEY  — Render dashboard → Account Settings → API Keys
-#   * Variable RENDER_SERVICE_ID — the quickquill-backend service id (srv-...)
-#   From a service page: the URL is https://dashboard.render.com/web/srv-xxxx.
 
 on:
   push:
