@@ -1,10 +1,16 @@
 name: Backend Deploy
 
 # Watches the Render blueprint redeploy triggered by the same push and fails
-# if the deploy does not go live, so the README badge reflects the real
+# only when the deploy genuinely fails, so the README badge reflects the real
 # backend state. Render's blueprint auto-deploys on push to main (render.yaml
 # autoDeploy: true); this workflow just polls the Render API for the deploy
 # matching the pushed commit SHA.
+#
+# A push is superseded when a newer push lands while its deploy is still
+# building: Render cancels the older deploy and GitHub cancels the older run,
+# so "deploy_cancelled"/superseded is expected and reported as success (the
+# newest deploy's own run owns the final status). Only build_failed /
+# update_failed / runtime_failed are real failures.
 #
 # Setup (one time):
 #   * Secret   RENDER_API_KEY  — Render dashboard → Account Settings → API Keys
@@ -14,6 +20,10 @@ name: Backend Deploy
 on:
   push:
     branches: [ main ]
+
+concurrency:
+  group: render-deploy-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -25,6 +35,7 @@ jobs:
   wait-for-render:
     name: Wait for Render deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - name: Poll Render deploy status
         env:
@@ -43,62 +54,106 @@ jobs:
               ;;
           esac
 
-          HTTP_CODE=/tmp/http_code.txt
+          DEPLOYS_API="https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys?limit=30"
+          SERVICE_API="https://api.render.com/v1/services/$RENDER_SERVICE_ID"
+          SERVICE_BODY=/tmp/service_body.json
           DEPLOY_BODY=/tmp/deploy_body.json
-          PARSED_STATUS=/tmp/parsed_status.txt
-          API_URL="https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys?limit=5"
+          PARSE_OUTPUT=/tmp/parse.out
 
-          for i in $(seq 1 80); do
-            curl -sS -o "$DEPLOY_BODY" -w '%{http_code}' \
+          # Resolve the public service URL once so we can probe /api/health
+          # after the deploy goes live.
+          SERVICE_URL=""
+          if curl -fsS -H "Authorization: Bearer $RENDER_API_KEY" "$SERVICE_API" -o "$SERVICE_BODY"; then
+            SERVICE_URL=$(python3 - "$SERVICE_BODY" <<'PY'
+          import json, sys
+          data = json.load(open(sys.argv[1], encoding="utf-8"))
+          print(data.get("serviceDetails", {}).get("liveUrl", "") or data.get("serviceDetails", {}).get("url", ""))
+          PY
+            )
+          fi
+
+          for i in $(seq 1 160); do
+            HTTP_CODE=$(curl -sS -o "$DEPLOY_BODY" -w '%{http_code}' \
               -H "Authorization: Bearer $RENDER_API_KEY" \
-              "$API_URL" > "$HTTP_CODE"
+              "$DEPLOYS_API")
+            echo "render api http: $HTTP_CODE (attempt $i)"
 
-            http_code=$(cat "$HTTP_CODE")
-            echo "render api http: $http_code"
-
-            if [ "$http_code" != "200" ]; then
-              echo "::error::Render API returned HTTP $http_code for $API_URL"
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "::error::Render API returned HTTP $HTTP_CODE for $DEPLOYS_API"
               echo "response body:"
               sed 's/^/  /' "$DEPLOY_BODY" 2>/dev/null || true
               exit 1
             fi
 
-            COMMIT_SHA="$COMMIT_SHA" python3 - "$DEPLOY_BODY" > "$PARSED_STATUS" <<'PY'
-          import json, os, sys
-          with open(sys.argv[1], encoding="utf-8") as fh:
-              raw = fh.read()
-          try:
-              deploys = json.loads(raw)
-          except json.JSONDecodeError:
-              print("not_found")
-              print("unexpected response body:", file=sys.stderr)
-              print(raw[:2000], file=sys.stderr)
-          else:
-              sha = os.environ["COMMIT_SHA"]
-              for dep in deploys:
-                  if dep.get("commit", {}).get("id") == sha:
-                      print(dep["status"])
-                      break
-              else:
-                  print("not_found")
-          PY
+            COMMIT_SHA="$COMMIT_SHA" python3 - "$DEPLOY_BODY" > "$PARSE_OUTPUT"
+            MATCH_STATUS=$(sed -n '1p' "$PARSE_OUTPUT")
+            LATEST_STATUS=$(sed -n '2p' "$PARSE_OUTPUT")
+            IS_LATEST=$(sed -n '3p' "$PARSE_OUTPUT")
+            echo "deploy(${COMMIT_SHA:0:10}): $MATCH_STATUS | latest: $LATEST_STATUS | is_latest: $IS_LATEST"
 
-            status=$(cat "$PARSED_STATUS")
-            echo "deploy status: $status"
-
-            case "$status" in
+            case "$MATCH_STATUS" in
               live)
-                echo "Render deploy succeeded"
+                if [ "$IS_LATEST" = "yes" ]; then
+                  echo "Render deploy succeeded for commit ${COMMIT_SHA:0:10}"
+                  exit 0
+                fi
+                # Our deploy is live but superseded by a newer one; the newer
+                # commit's run owns the final result, so report success here.
+                echo "::warning::Render deploy went live and was superseded by a newer push; finalized by that run"
                 exit 0
                 ;;
-              deploy_cancelled|build_failed|update_failed|canceled)
-                echo "::error::Render deploy failed ($status)"
+              not_found)
+                # Render usually has not recorded the deploy on the very first
+                # poll (it appears after the GitHub hook is processed).
+                sleep 30
+                continue
+                ;;
+              deploy_cancelled|canceled|superseded)
+                if [ "$IS_LATEST" = "yes" ]; then
+                  echo "::error::Render deploy was cancelled for the latest commit ($MATCH_STATUS)"
+                  exit 1
+                fi
+                echo "Render deploy superseded by a newer push; success"
+                exit 0
+                ;;
+              build_failed|update_failed|pre_deploy_failed|deploy_failed|runtime_failed|destroyed)
+                echo "::error::Render deploy failed ($MATCH_STATUS)"
                 exit 1
                 ;;
+              in_progress|created|building|deploying|pending|*)
+                sleep 30
+                ;;
             esac
-
-            sleep 30
           done
 
           echo "::error::Timed out waiting for the Render deploy to finish"
+          exit 1
+      - name: Probe service health
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # Re-resolve the live URL (also landed in step 1, but cheap to fetch).
+          SERVICE_URL=$(curl -fsS \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            "https://api.render.com/v1/services/$RENDER_SERVICE_ID" | python3 -c \
+            "import json,sys; d=json.load(sys.stdin); print(d.get('serviceDetails',{}).get('liveUrl','') or d.get('serviceDetails',{}).get('url',''))")
+          echo "service url: $SERVICE_URL"
+
+          if [ -z "$SERVICE_URL" ]; then
+            echo "::error::Could not resolve the service's live URL from the Render API"
+            exit 1
+          fi
+
+          for i in $(seq 1 10); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "$SERVICE_URL/api/health" || true)
+            echo "health probe ($i): http $code"
+            if [ "$code" = "200" ]; then
+              echo "Backend is live and serving on $SERVICE_URL"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::Deploy went live but /api/health did not return 200 at $SERVICE_URL"
           exit 1
