@@ -20,7 +20,10 @@
 #     Live once the port accepts connections; GET /api/health is available for
 #     manual probing.
 #   * Free web instances have no persistent disk, so dictionary.db is baked
-#     into the image. Commit a larger dictionary.db and redeploy to grow it.
+#     into the image. It is NOT committed to the repo: the Dockerfile pulls it
+#     from the GitHub release asset "dictionary-common.db" at build time and
+#     verifies its SHA256 (see DICTIONARY_DB_URL / DICTIONARY_DB_SHA256 in
+#     the Dockerfile).
 #   * The web service and the database are pinned to the SAME region (region:
 #     oregon). Render resolves a managed database's internal hostname only
 #     within its own region; a region mismatch shows up as Hikari failing to
