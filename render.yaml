@@ -21,6 +21,11 @@
 #     manual probing.
 #   * Free web instances have no persistent disk, so dictionary.db is baked
 #     into the image. Commit a larger dictionary.db and redeploy to grow it.
+#   * The web service and the database are pinned to the SAME region (region:
+#     oregon). Render resolves a managed database's internal hostname only
+#     within its own region; a region mismatch shows up as Hikari failing to
+#     reach the DB at boot ("Unable to determine Dialect"). Change both
+#     regions together if you take the app to another region.
 #   * CORS_ALLOWED_ORIGINS must be the exact browser origin of the site calling
 #     the API. For a project page under <user>.github.io that origin is
 #     https://<user>.github.io (no path). Add more origins as a comma-separated
@@ -31,6 +36,7 @@ services:
     name: quickquill-backend
     runtime: docker
     repo: https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker
+    region: oregon
     dockerfilePath: ./Dockerfile
     dockerContext: .
     plan: free
@@ -46,21 +52,14 @@ services:
       # GitHub Pages origin that is allowed to call this backend.
       - key: CORS_ALLOWED_ORIGINS
         value: https://nickczak.github.io
-      # Render's fromDatabase connectionString is a non-JDBC postgres:// URL,
-      # so the JDBC URL is assembled in application.properties from these
-      # parts instead (DataSourceUrlNormalizer handles any raw connection string).
-      - key: DB_HOST
+      # Render's connectionString is a non-JDBC postgres:// URL; it is the
+      # single source of truth for host/port/database and is rewritten into a
+      # JDBC URL by DataSourceUrlNormalizer (which drops the embedded
+      # credentials). DB_USERNAME/DB_PASSWORD below carry the credentials.
+      - key: DB_URL
         fromDatabase:
           name: quickquill-db
-          property: host
-      - key: DB_PORT
-        fromDatabase:
-          name: quickquill-db
-          property: port
-      - key: DB_NAME
-        fromDatabase:
-          name: quickquill-db
-          property: database
+          property: connectionString
       - key: DB_USERNAME
         fromDatabase:
           name: quickquill-db
@@ -72,4 +71,5 @@ services:
 
 databases:
   - name: quickquill-db
+    region: oregon
     plan: free
