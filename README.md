@@ -2,8 +2,9 @@
 
 <h4 align="center">A Quick Lookup Dictionary at your service.</h4>
 <p align="center">
-  <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/nickczak/QuickQuill-Dictionary-SpellChecker/ci.yml?label=Backend&logo=github" alt="Backend Build & Test"></a>
-  <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/github-pages.yml"><img src="https://img.shields.io/github/actions/workflow/status/nickczak/QuickQuill-Dictionary-SpellChecker/github-pages.yml?label=Frontend&logo=github" alt="Frontend Deploy"></a>
+  <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/nickczak/QuickQuill-Dictionary-SpellChecker/ci.yml?label=Build%20%26%20Test&logo=github" alt="Build & Test"></a>
+  <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/render-deploy.yml"><img src="https://img.shields.io/github/actions/workflow/status/nickczak/QuickQuill-Dictionary-SpellChecker/render-deploy.yml?label=Backend%20Deploy&logo=render" alt="Backend Deploy"></a>
+  <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/github-pages.yml"><img src="https://img.shields.io/github/actions/workflow/status/nickczak/QuickQuill-Dictionary-SpellChecker/github-pages.yml?label=Frontend%20Deploy&logo=github" alt="Frontend Deploy"></a>
   <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/releases"><img src="https://img.shields.io/github/v/release/nickczak/QuickQuill-Dictionary-SpellChecker?color=purple&cachebust=1" alt="Release">
   <a href="https://quickquill.ink"><img src="https://img.shields.io/badge/website-quickquill.ink-black" alt="Website"></a>
 </p>
@@ -220,6 +221,9 @@ The app is split across two hosts: the **Spring Boot backend runs on Render** an
 2. Give the service a custom domain: in **Render → quickquill-backend → Settings → Custom Domains** add `api.quickquill.ink` (Render issues the TLS cert). Then add the DNS record below.
 3. The blueprint sets `CORS_ALLOWED_ORIGINS=https://quickquill.ink` so the frontend (served from that domain) may call the API.
 4. `dictionary.db` is committed to the repo and baked into the image (Render's free web instances have no persistent disk). To serve a larger dictionary, commit the bigger database and re-deploy.
+5. For the **Backend Deploy** badge to reflect the real Render state, set the following in **GitHub → Settings → Secrets and variables → Actions**:
+   - **Secret** `RENDER_API_KEY` — Render → Account Settings → API Keys
+   - **Variable** `RENDER_SERVICE_ID` — the `quickquill-backend` service id (the `srv-...` in the service page URL)
 
 ### Frontend → GitHub Pages (custom domain)
 

@@ -37,6 +37,7 @@ services:
     runtime: docker
     repo: https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker
     region: oregon
+    autoDeploy: true
     dockerfilePath: ./Dockerfile
     dockerContext: .
     plan: free
