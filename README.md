@@ -3,9 +3,9 @@
 <h4 align="center">A Quick Lookup Dictionary at your service.</h4>
 <p align="center">
   <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/ci.yml"><img src="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/ci.yml/badge.svg" alt="Build and Test"></a>
-  <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/deploy.yml"><img src="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/deploy.yml/badge.svg" alt="Deploy"></a>
+  <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/github-pages.yml"><img src="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/github-pages.yml/badge.svg" alt="Deploy"></a>
   <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/releases"><img src="https://img.shields.io/github/v/release/nickczak/QuickQuill-Dictionary-SpellChecker?color=purple&cachebust=1" alt="Release">
-  <a href="https://quickquill.ink"><img src="https://img.shields.io/badge/website-quickquill.ink-black" alt="Website"></a>
+  <a href="https://nickczak.github.io/QuickQuill-Dictionary-SpellChecker/"><img src="https://img.shields.io/badge/website-GitHub%20Pages-black" alt="Website"></a>
 </p>
 
 ---
@@ -25,7 +25,7 @@ QuickQuill is a full-stack dictionary and spell-check application. The core engi
     - Examples
     - Forms/inflections and etymology
 
-> **Note:** The live deployment at [quickquill.ink](https://quickquill.ink) uses a trimmed dictionary (~200K words) to keep the free-tier VPS fast and responsive. The full database supports **over 1.28 million words** at the same speed — see the [analytics](#analytics) section below. The only words cut are obscure, obsolete word forms (rare plurals, scientific jargon, archaic inflections, etc.) — no common English vocabulary was removed.
+> **Note:** The live deployment on Render's free tier ships the committed `dictionary.db` (baked into the backend image). The full database supports **over 1.28 million words** at the same speed — see the [analytics](#analytics) section below. The only words cut are obscure, obsolete word forms (rare plurals, scientific jargon, archaic inflections, etc.) — no common English vocabulary was removed.
 
 <p align="center"><img src="showcase-desktop.gif" alt="QuickQuill Showcase" width=800></p>
 
@@ -49,7 +49,7 @@ Import complete:
   - BCrypt password hashing with session token management
   - Angular 21 frontend with RxJS debounced search streams
   - In-memory LRU caching with thread-safe access
-  - Dockerized deployment (multi-stage: C++ engine + Spring Boot + Angular + PostgreSQL)
+  - Backend Dockerized for Render; Angular frontend served from GitHub Pages
   - Catch2 for C++ tests
 
 > The C++ engine is compiled into `libquickquill_engine.so` with a flat C ABI (`extern "C"`). Spring Boot calls it through Panama FFM — no JNI or C glue code needed.
@@ -81,7 +81,7 @@ Then place `dictionary.db` in the project root.
   - **Database:** PostgreSQL 16 (user data), SQLite (dictionary)
   - **Frontend:** Angular 21, RxJS, TypeScript
   - **Tests:** Catch2 (C++), JUnit (Java)
-  - **Deploy:** Docker, compose, nginx 
+  - **Deploy:** Render (backend), GitHub Pages (frontend) 
 
 ### Project Layout
 ```
@@ -111,6 +111,7 @@ The Spring Boot backend uses `studio/src/main/resources/application.properties`.
 spring.application.name=studio
 server.port=8080
 quickquill.dictionary-path=../dictionary.db
+quickquill.cors.allowed-origins=${CORS_ALLOWED_ORIGINS:https://nickczak.github.io}
 
 # PostgreSQL — override with DB_URL, DB_USERNAME, DB_PASSWORD
 spring.datasource.url=${DB_URL:jdbc:postgresql://localhost:5432/quickquill}
@@ -209,6 +210,27 @@ cmake --build engine/build
 ```
 
 ---
+## Deployment
+
+The app is split across two hosts: the **Spring Boot backend runs on Render** and the **Angular frontend is served from GitHub Pages**. Nothing self-hosted is required anymore (no VPS, Docker Hub image pushes, or nginx — the old `deploy.yml`, `compose.prod.yml` and `scripts/deploy_docker.sh` stack was removed).
+
+### Backend → Render
+
+1. In the Render dashboard (*New → Blueprint*), connect this repo. Render provisions the managed PostgreSQL database and the `quickquill-backend` web service from [`render.yaml`](render.yaml) and auto-redeploys on pushes to `main`.
+2. Copy down the service's public URL, e.g. `https://quickquill-backend-xxxx.onrender.com`. It is needed for the frontend (step 3 below).
+3. The blueprint sets `CORS_ALLOWED_ORIGINS=https://nickczak.github.io` so the GitHub Pages site may call the API. Using a custom domain for the frontend? Change this to your custom origin.
+4. `dictionary.db` is committed to the repo and baked into the image (Render's free web instances have no persistent disk). To serve a larger dictionary, commit the bigger database and re-deploy.
+
+### Frontend → GitHub Pages
+
+1. In **Settings → Pages**, set **Source** to *Deploy from a branch* and pick the `gh-pages` branch, root directory. The first deploy creates that branch.
+2. Set the repository variable `BACKEND_URL` (**Settings → Secrets and variables → Actions → Variables**) to your Render backend URL from step 2 above. This overrides the default in `web/src/environments/environment.prod.ts` without a code change.
+3. Push to `main` (or run the `Deploy Frontend to GitHub Pages` workflow manually). The app is published at `https://<user>.github.io/QuickQuill-Dictionary-SpellChecker/`.
+
+`environment.prod.ts`, `angular.json` (the `gh-pages` baseHref) and `web/public/404.html` (SPA deep-link fallback) make the static build work under the `/QuickQuill-Dictionary-SpellChecker/` sub-path.
+
+---
+
 ## API
 
 ### Dictionary

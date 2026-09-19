@@ -1,28 +1,12 @@
-# QuickQuill single multi-stage Dockerfile.
+# QuickQuill backend Docker image.
 #
-# Produces two images from the same file via --target:
-#   * backend  - Spring Boot JAR + C++ engine libquickquill_engine.so
-#   * frontend - nginx serving the built Angular app
-#
-# Images are built and pushed by .github/workflows/deploy.yml, then pulled on
-# the VPS (see compose.prod.yml and scripts/deploy_docker.sh).
+# Builds the Spring Boot JAR plus the C++ engine (libquickquill_engine.so) and
+# bakes the SQLite dictionary (dictionary.db) into the runtime image. Render
+# builds this Dockerfile directly via render.yaml; the container listens on
+# :8080. The Angular frontend is not part of this image — it is served from
+# GitHub Pages (see .github/workflows/github-pages.yml).
 
-### Stage 1: Angular frontend build
-FROM node:20-slim AS frontend-build
-WORKDIR /web
-COPY web/package*.json ./
-RUN npm ci
-COPY web/ ./
-RUN npm run build
-
-### Stage 2: nginx runtime image (target: frontend)
-FROM nginx:stable-alpine AS frontend
-COPY nginx/docker.conf /etc/nginx/conf.d/default.conf
-COPY --from=frontend-build /web/dist/browser /usr/share/nginx/html
-
-EXPOSE 80 443
-
-### Stage 3: C++ engine build
+### Stage 1: C++ engine build
 FROM debian:bookworm-slim AS engine-build
 RUN apt-get update \
   && apt-get install -y --no-install-recommends build-essential cmake git ca-certificates curl pkg-config unzip tar zip python3 \
@@ -41,19 +25,24 @@ RUN cmake -S /src/engine -B /src/engine/build -DCMAKE_BUILD_TYPE=Release \
      -DVCPKG_TARGET_TRIPLET=x64-linux \
   && cmake --build /src/engine/build --target quickquill_engine -j$(nproc)
 
-### Stage 4: Spring Boot build
+### Stage 2: Spring Boot build
 FROM eclipse-temurin:25-jdk AS backend-build
 WORKDIR /src
 COPY studio/ ./
 COPY --from=engine-build /src/engine/build/src/libquickquill_engine.so /src/engine/build/src/libquickquill_engine.so
 RUN ./gradlew bootJar
 
-### Stage 5: backend runtime image (target: backend)
+### Stage 3: backend runtime image
 FROM eclipse-temurin:25-jre AS backend
 WORKDIR /app
 
 COPY --from=backend-build /src/build/libs/*.jar ./app.jar
 COPY --from=engine-build /src/engine/build/src/libquickquill_engine.so ./libquickquill_engine.so
+# dictionary.db is committed to the repo and baked into the image (Render's
+# free web services have no persistent disk). To serve a larger dictionary,
+# commit the bigger database and redeploy.
+COPY dictionary.db* ./
 
 EXPOSE 8080
-CMD ["java", "--enable-native-access=ALL-UNNAMED", "-Djava.library.path=.", "-jar", "app.jar", "--quickquill.dictionary-path=/app/dictionary.db"]
+ENV QUICKQUILL_DICTIONARY_PATH=/app/dictionary.db
+CMD ["java", "--enable-native-access=ALL-UNNAMED", "-Djava.library.path=.", "-jar", "app.jar"]

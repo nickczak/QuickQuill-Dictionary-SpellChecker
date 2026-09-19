@@ -46,7 +46,6 @@ services:
       - backend
     volumes:
       # NGINX_CONF selects the local dev site config (dev.conf, plain HTTP).
-      # Production uses docker.conf baked into the frontend image (compose.prod.yml).
       # :z same SELinux relabel as above.
       - ./nginx/${NGINX_CONF:-dev.conf}:/etc/nginx/conf.d/default.conf:ro,z
       # :z required so nginx can read the built Angular files under SELinux.

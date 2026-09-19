@@ -1,0 +1,75 @@
+# Render Blueprint for the QuickQuill backend.
+#
+# The Angular frontend deploys to GitHub Pages (.github/workflows/github-pages.yml);
+# only the backend runs on Render.
+#
+# Deploy: in the Render dashboard, create a new Blueprint pointing at this
+# repo (or `render blueprint` from the CLI). Render provisions the managed
+# Postgres and the backend web service below and auto-redeploys them on push
+# to main.
+#
+# Notes:
+#   * Render builds ./Dockerfile directly. A multi-stage Dockerfile is fine —
+#     the final stage is the runtime image.
+#   * Render defaults the expected HTTP port to 10000 (the PORT env var) and
+#     stalls a deploy when the app is actually listening elsewhere. Spring Boot
+#     binds 8080 (server.port), so PORT is overridden to match.
+#   * No healthCheckPath: on a cold free instance the app can take ~90s to
+#     serve, and a health check trailing that window keeps failing and gets
+#     the service suspended (learned the hard way). Render marks the deploy
+#     Live once the port accepts connections; GET /api/health is available for
+#     manual probing.
+#   * Free web instances have no persistent disk, so dictionary.db is baked
+#     into the image. Commit a larger dictionary.db and redeploy to grow it.
+#   * CORS_ALLOWED_ORIGINS must be the exact browser origin of the site calling
+#     the API. For a project page under <user>.github.io that origin is
+#     https://<user>.github.io (no path). Add more origins as a comma-separated
+#     list if the frontend is also served from a custom domain.
+
+services:
+  - type: web
+    name: quickquill-backend
+    runtime: docker
+    repo: https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      # Spring Boot binds server.port=8080; align Render's expected port so it
+      # routes traffic there instead of the default 10000.
+      - key: PORT
+        value: "8080"
+      - key: QUICKQUILL_DICTIONARY_PATH
+        value: /app/dictionary.db
+      - key: DB_SSLMODE
+        value: require
+      # GitHub Pages origin that is allowed to call this backend.
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://nickczak.github.io
+      # Render's fromDatabase connectionString is a non-JDBC postgres:// URL,
+      # so the JDBC URL is assembled in application.properties from these
+      # parts instead (DataSourceUrlNormalizer handles any raw connection string).
+      - key: DB_HOST
+        fromDatabase:
+          name: quickquill-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: quickquill-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: quickquill-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: quickquill-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: quickquill-db
+          property: password
+
+databases:
+  - name: quickquill-db
+    plan: free
