@@ -135,6 +135,8 @@ def main() -> None:
         },
     ]
 
+    expected_lemmas = {entry["lemma"] for entry in entries}
+
     for entry in entries:
         cur.execute("SELECT id FROM words WHERE lemma = ?;", (entry["lemma"],))
         row = cur.fetchone()
@@ -178,6 +180,18 @@ def main() -> None:
                 insert_sense_items(cur, "examples", "example", sense_id, word_id, entry.get("examples", []), "example")
                 insert_sense_items(cur, "synonyms", "synonym", sense_id, word_id, entry.get("synonyms", []), "synonym")
                 insert_sense_items(cur, "antonyms", "antonym", sense_id, word_id, entry.get("antonyms", []), "antonym")
+
+    cur.execute(
+        "SELECT lemma FROM words WHERE lemma IN ({})".format(
+            ",".join("?" for _ in expected_lemmas)
+        ),
+        tuple(expected_lemmas),
+    )
+    imported_lemmas = {row[0] for row in cur.fetchall()}
+    missing_lemmas = expected_lemmas - imported_lemmas
+    if missing_lemmas:
+        conn.rollback()
+        raise RuntimeError(f"Dictionary extras missing after import: {sorted(missing_lemmas)}")
 
     conn.commit()
     conn.close()

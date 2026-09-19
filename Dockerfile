@@ -57,6 +57,7 @@ RUN mkdir -p /out \
 COPY scripts/import_extras.py /out/import_extras.py
 RUN python3 /out/import_extras.py --db /out/dictionary.db \
   && rm /out/import_extras.py
+RUN python3 -c 'import sqlite3; expected={"nevermore","quickquill","lexiconlevissimum","nicholassobchak","sobchak","neilmartini","gwen"}; conn=sqlite3.connect("/out/dictionary.db"); actual={row[0] for row in conn.execute("SELECT lemma FROM words WHERE lemma IN (?,?,?,?,?,?,?)", tuple(expected))}; conn.close(); missing=expected-actual; raise SystemExit(f"dictionary extras missing after import: {sorted(missing)}") if missing else print(f"verified {len(actual)} custom dictionary extras")'
 
 ### Stage 4: backend runtime image
 FROM eclipse-temurin:25-jre AS backend
