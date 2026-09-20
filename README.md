@@ -4,7 +4,7 @@
 <p align="center">
   <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/nickczak/QuickQuill-Dictionary-SpellChecker/ci.yml?label=Build%20%26%20Test&logo=github" alt="Build & Test"></a>
   <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/render-deploy.yml"><img src="https://img.shields.io/github/actions/workflow/status/nickczak/QuickQuill-Dictionary-SpellChecker/render-deploy.yml?label=Backend%20Deploy&logo=render" alt="Backend Deploy"></a>
-  <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/github-pages.yml"><img src="https://img.shields.io/github/actions/workflow/status/nickczak/QuickQuill-Dictionary-SpellChecker/github-pages.yml?label=Frontend%20Deploy&logo=github" alt="Frontend Deploy"></a>
+  <a href="https://vercel.com/"><img src="https://img.shields.io/badge/frontend-Vercel-black?logo=vercel" alt="Frontend Deploy"></a>
   <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/releases"><img src="https://img.shields.io/github/v/release/nickczak/QuickQuill-Dictionary-SpellChecker?color=purple&cachebust=1" alt="Release">
   <a href="https://quickquill.ink"><img src="https://img.shields.io/badge/website-quickquill.ink-black" alt="Website"></a>
 </p>
@@ -50,7 +50,7 @@ Import complete:
   - BCrypt password hashing with session token management
   - Angular 21 frontend with RxJS debounced search streams
   - In-memory LRU caching with thread-safe access
-  - Backend Dockerized for Render; Angular frontend served from GitHub Pages
+  - Backend Dockerized for Render; Angular frontend served from Vercel
   - Catch2 for C++ tests
 
 > The C++ engine is compiled into `libquickquill_engine.so` with a flat C ABI (`extern "C"`). Spring Boot calls it through Panama FFM — no JNI or C glue code needed.
@@ -82,7 +82,7 @@ Then place `dictionary.db` in the project root.
   - **Database:** PostgreSQL 16 (user data), SQLite (dictionary)
   - **Frontend:** Angular 21, RxJS, TypeScript
   - **Tests:** Catch2 (C++), JUnit (Java)
-  - **Deploy:** Render (backend), GitHub Pages (frontend) 
+  - **Deploy:** Render (backend), Vercel (frontend) 
 
 ### Project Layout
 ```
@@ -213,7 +213,7 @@ cmake --build engine/build
 ---
 ## Deployment
 
-The app is split across two hosts: the **Spring Boot backend runs on Render** and the **Angular frontend is served from GitHub Pages**. Nothing self-hosted is required anymore (no VPS, Docker Hub image pushes, or nginx — the old `deploy.yml`, `compose.prod.yml` and `scripts/deploy_docker.sh` stack was removed).
+The app is split across two hosts: the **Spring Boot backend runs on Render** and the **Angular frontend is served from Vercel**. Nothing self-hosted is required anymore (no VPS, Docker Hub image pushes, or nginx — the old `deploy.yml`, `compose.prod.yml` and `scripts/deploy_docker.sh` stack was removed).
 
 ### Backend → Render
 
@@ -221,31 +221,26 @@ The app is split across two hosts: the **Spring Boot backend runs on Render** an
 2. Give the service a custom domain: in **Render → quickquill-backend → Settings → Custom Domains** add `api.quickquill.ink` (Render issues the TLS cert). Then add the DNS record below.
 3. The blueprint sets `CORS_ALLOWED_ORIGINS=https://quickquill.ink` so the frontend (served from that domain) may call the API.
 4. The SQLite dictionary is **not** committed to the repo. It is published as the GitHub release asset `dictionary-common.db`; the Dockerfile downloads it during the build, verifies its SHA256, layers the custom QuickQuill entries on top via `scripts/import_extras.py`, and bakes the result into the image (Render's free web instances have no persistent disk). To serve a different dictionary, upload the new `.db` to a release and bump `DICTIONARY_DB_URL`/`DICTIONARY_DB_SHA256` in `Dockerfile`.
-5. Free web instances sleep after ~15 minutes without traffic. The blueprint provisions a `quickquill-keepalive` cron job (`keepalive/`) that pings `GET /api/health` every 10 minutes so the backend stays warm.
+5. Free web instances may sleep after periods without traffic.
 6. For the **Backend Deploy** badge to reflect the real Render state, set the following in **GitHub → Settings → Secrets and variables → Actions**:
    - **Secret** `RENDER_API_KEY` — Render → Account Settings → API Keys
    - **Variable** `RENDER_SERVICE_ID` — the `quickquill-backend` service id (the `srv-...` in the service page URL)
 
-### Frontend → GitHub Pages (custom domain)
+### Frontend → Vercel (custom domain)
 
-The site is published at **https://quickquill.ink**. The pieces that make it work:
+The site is published at **https://quickquill.ink**. Configure the Vercel project with:
 
-- `web/angular.json` — the `gh-pages` build config sets `baseHref: "/"` (the site lives at the domain root).
-- `web/public/CNAME` — `quickquill.ink`; copied into the published branch so GitHub knows the domain.
-- `web/public/404.html` — routes hard refreshes/deep links back into the SPA.
-- `web/src/environments/environment.prod.ts` + the `BACKEND_URL` repo variable — where the Angular app reaches the API (`api.quickquill.ink`).
+- **Root Directory:** `web`
+- **Framework:** Angular
+- **Build command:** `npm run build`
+- **Output directory:** `dist/browser`
+- **Production domain:** `quickquill.ink`
 
-One-time setup:
+The Vercel configuration is stored in `web/vercel.json`. The frontend calls the backend at `https://api.quickquill.ink`, and the Render backend allows the Vercel custom domain through `CORS_ALLOWED_ORIGINS`.
 
-1. **DNS** at your registrar:
-   - `quickquill.ink` → **A** to GitHub Pages: `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
-   - `www.quickquill.ink` → **CNAME** `nickczak.github.io` (GitHub auto-redirects www → apex)
-   - `api.quickquill.ink` → **CNAME** `quickquill-backend-xxxx.onrender.com` (may require a TXT verification value from Render)
-2. In **GitHub → Settings → Pages**: set the Custom domain to `quickquill.ink`, save, and enable HTTPS enforcement once the certificate is issued.
-3. In **GitHub → Settings → Secrets and variables → Actions → Variables**: set `BACKEND_URL=https://api.quickquill.ink` (overrides the default in `environment.prod.ts`).
-4. Push to `main`; the GitHub Pages workflow builds and deploys, and Render redeploys the backend.
+DNS should point `quickquill.ink` and `www.quickquill.ink` to Vercel according to the domains shown in the Vercel dashboard. The API domain remains a CNAME to the Render backend.
 
-> The `nickczak.github.io/QuickQuill-Dictionary-SpellChecker/` URL stops serving once the custom domain is configured — GitHub redirects it to `quickquill.ink`.
+Pushes to `main` are deployed automatically by Vercel's Git integration, while the frontend deployment workflow verifies the resulting production deployment.
 
 ---
 

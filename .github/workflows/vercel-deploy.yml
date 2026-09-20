@@ -1,0 +1,110 @@
+name: Deploy Frontend to Vercel
+
+# Verifies that Vercel's production deployment for the pushed commit went live
+# and that the site answers. Vercel deploys automatically through its GitHub
+# integration (project root: web/); this workflow does NOT build or deploy —
+# it watches the Vercel API for the deployment built from this commit and
+# probes the live site, so the README badge reflects the real frontend state.
+#
+# The frontend calls the backend at api.quickquill.ink (see
+# web/src/environments/environment.prod.ts), which Vercel does not serve.
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: vercel-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+  VERCEL_TEAM_ID: ${{ vars.VERCEL_TEAM_ID }}
+
+jobs:
+  verify-deployment:
+    name: Verify production deploy on Vercel
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Wait for the Vercel production deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          : "${VERCEL_TOKEN:?Set the VERCEL_TOKEN secret in GitHub → Settings → Secrets}"
+          : "${VERCEL_PROJECT_ID:?Set the VERCEL_PROJECT_ID variable in GitHub → Settings → Variables}"
+
+          TEAM_PARAM=""
+          if [ -n "${VERCEL_TEAM_ID:-}" ]; then
+            TEAM_PARAM="&teamId=$VERCEL_TEAM_ID"
+          fi
+          API_URL="https://api.vercel.com/v6/deployments?target=production&projectId=$VERCEL_PROJECT_ID&limit=30$TEAM_PARAM"
+
+          # --- Find the deployment built from the pushed commit ---------------
+          for i in $(seq 1 90); do
+            BODY=$(mktemp)
+            HTTP_CODE=$(curl -sS -o "$BODY" -w '%{http_code}' \
+              -H "Authorization: Bearer $VERCEL_TOKEN" "$API_URL" || true)
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "poll $i: Vercel API returned HTTP $HTTP_CODE"
+              sed 's/^/  /' "$BODY" 2>/dev/null || true
+            else
+              STATE=$(python3 - "$BODY" <<'PY'
+          import json, os, sys
+          try:
+              deployments = json.load(open(sys.argv[1], encoding="utf-8"))["deployments"]
+          except Exception:
+              deployments = []
+          sha = os.environ["COMMIT_SHA"]
+          match = next(
+              (d for d in deployments if (d.get("meta") or {}).get("githubCommitSha") == sha),
+              None,
+          )
+          print(match.get("readyState", "NOT_FOUND") if match else "NOT_FOUND")
+          PY
+              )
+              echo "poll $i -> readyState: $STATE"
+              case "$STATE" in
+                READY)
+                  echo "::notice::Vercel production deployment is ready for commit ${COMMIT_SHA:0:10}"
+                  exit 0
+                  ;;
+                QUEUED|BUILDING|INITIALIZING|NOT_FOUND)
+                  ;;
+                ERROR|CANCELED)
+                  echo "::error::Vercel production deployment failed ($STATE) for commit ${COMMIT_SHA:0:10}"
+                  exit 1
+                  ;;
+                *)
+                  echo "poll $i: unexpected readyState $STATE"
+                  ;;
+              esac
+            fi
+            sleep 20
+          done
+
+          echo "::error::Timed out waiting for the Vercel production deployment to reach READY"
+          exit 1
+      - name: Probe live site
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          set -euo pipefail
+          SITE="${SITE_URL:-https://quickquill.ink}"
+          for i in $(seq 1 20); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "$SITE" || true)
+            echo "site probe $i: HTTP $code"
+            if [ "$code" = "200" ]; then
+              echo "Frontend is live and serving on $SITE"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::Deployment is ready but $SITE did not return 200"
+          exit 1

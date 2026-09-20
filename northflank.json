@@ -1,0 +1,209 @@
+{
+  "apiVersion": "v1.2",
+  "name": "QuickQuill",
+  "description": "QuickQuill backend: Spring Boot service + managed PostgreSQL on Northflank.",
+  "options": {
+    "autorun": false,
+    "concurrencyPolicy": "allow"
+  },
+  "spec": {
+    "kind": "Workflow",
+    "spec": {
+      "type": "sequential",
+      "steps": [
+        {
+          "kind": "Project",
+          "ref": "project",
+          "spec": {
+            "name": "QuickQuill",
+            "description": "QuickQuill dictionary and spell-check backend",
+            "region": "us-west",
+            "networking": {
+              "allowedIngressProjects": []
+            }
+          }
+        },
+        {
+          "kind": "Workflow",
+          "spec": {
+            "type": "sequential",
+            "context": {
+              "projectId": "${refs.project.id}"
+            },
+            "steps": [
+              {
+                "kind": "Addon",
+                "ref": "quickquill-db",
+                "spec": {
+                  "name": "quickquill-db",
+                  "type": "postgresql",
+                  "version": "16",
+                  "tlsEnabled": true,
+                  "externalAccessEnabled": false,
+                  "billing": {
+                    "deploymentPlan": "nf-compute-50",
+                    "replicas": 1,
+                    "storage": 4096,
+                    "storageClass": "nvme"
+                  }
+                }
+              },
+              {
+                "kind": "CombinedService",
+                "ref": "quickquill-backend",
+                "spec": {
+                  "name": "quickquill-backend",
+                  "deployment": {
+                    "instances": 1,
+                    "storage": {
+                      "ephemeralStorage": {
+                        "storageSize": 2048
+                      },
+                      "shmSize": 64
+                    },
+                    "docker": {
+                      "configType": "default"
+                    }
+                  },
+                  "runtimeEnvironment": {
+                    "CORS_ALLOWED_ORIGINS": "https://quickquill.ink"
+                  },
+                  "runtimeFiles": {},
+                  "buildArguments": {},
+                  "buildFiles": {},
+                  "billing": {
+                    "deploymentPlan": "nf-compute-100-2",
+                    "buildPlan": "nf-compute-400-16"
+                  },
+                  "vcsData": {
+                    "projectType": "github",
+                    "projectUrl": "https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker",
+                    "projectBranch": "main"
+                  },
+                  "ports": [
+                    {
+                      "internalPort": 8080,
+                      "protocol": "HTTP",
+                      "name": "p01",
+                      "public": true,
+                      "domains": [],
+                      "security": {
+                        "policies": [],
+                        "credentials": []
+                      },
+                      "disableNfDomain": false
+                    }
+                  ],
+                  "buildSettings": {
+                    "dockerfile": {
+                      "buildEngine": "buildkit",
+                      "dockerWorkDir": "/",
+                      "dockerFilePath": "/Dockerfile",
+                      "buildkit": {
+                        "useCache": true,
+                        "cacheStorageSize": 16384
+                      }
+                    }
+                  },
+                  "healthChecks": [
+                    {
+                      "protocol": "HTTP",
+                      "type": "readinessProbe",
+                      "path": "/api/health",
+                      "port": 8080,
+                      "initialDelaySeconds": 90,
+                      "periodSeconds": 30,
+                      "timeoutSeconds": 10,
+                      "failureThreshold": 3
+                    }
+                  ],
+                  "disabledCI": false,
+                  "buildConfiguration": {
+                    "prRestrictions": [],
+                    "branchRestrictions": [
+                      "main"
+                    ],
+                    "pathIgnoreRules": [],
+                    "isAllowList": false,
+                    "ciIgnoreFlagsEnabled": true
+                  }
+                }
+              },
+              {
+                "kind": "SecretGroup",
+                "ref": "quickquill-secrets",
+                "spec": {
+                  "type": "secret",
+                  "secretType": "environment-arguments",
+                  "priority": 10,
+                  "secrets": {
+                    "variables": {
+                      "DB_SSLMODE": "require"
+                    },
+                    "files": {}
+                  },
+                  "addonDependencies": [
+                    {
+                      "addonId": "${refs.quickquill-db.id}",
+                      "keys": [
+                        {
+                          "keyName": "POSTGRES_URI",
+                          "aliases": [
+                            "DB_URL"
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "name": "quickquill-secrets",
+                  "restrictions": {
+                    "restricted": true,
+                    "nfObjects": [
+                      {
+                        "id": "${refs.quickquill-backend.id}",
+                        "type": "service"
+                      }
+                    ],
+                    "tags": []
+                  }
+                }
+              },
+              {
+                "kind": "Workflow",
+                "spec": {
+                  "type": "parallel",
+                  "steps": [
+                    {
+                      "kind": "Condition",
+                      "spec": {
+                        "kind": "Addon",
+                        "spec": {
+                          "data": {
+                            "addonId": "${refs.quickquill-db.id}"
+                          },
+                          "type": "running"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "Condition",
+                      "spec": {
+                        "kind": "Service",
+                        "spec": {
+                          "data": {
+                            "serviceId": "${refs.quickquill-backend.id}"
+                          },
+                          "type": "running"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,7 +1,6 @@
 # Render Blueprint for the QuickQuill backend.
 #
-# The Angular frontend deploys to GitHub Pages (.github/workflows/github-pages.yml);
-# only the backend runs on Render.
+# The Angular frontend deploys to Vercel; only the backend runs on Render.
 #
 # Deploy: in the Render dashboard, create a new Blueprint pointing at this
 # repo (or `render blueprint` from the CLI). Render provisions the managed
@@ -25,19 +24,15 @@
 #     verifies its SHA256, and layers the custom entries from
 #     scripts/import_extras.py on top (see DICTIONARY_DB_URL /
 #     DICTIONARY_DB_SHA256 in the Dockerfile).
-#   * Free web instances sleep after ~15 min without traffic; the quickquill-
-#     keepalive cron job pings /api/health every 10 minutes so the backend
-#     stays warm. PING_URL is the custom domain api.quickquill.ink; keep it in
-#     sync if the domain changes.
 #   * The web service and the database are pinned to the SAME region (region:
 #     oregon). Render resolves a managed database's internal hostname only
 #     within its own region; a region mismatch shows up as Hikari failing to
 #     reach the DB at boot ("Unable to determine Dialect"). Change both
 #     regions together if you take the app to another region.
 #   * CORS_ALLOWED_ORIGINS must be the exact browser origin of the site calling
-#     the API: https://quickquill.ink (the GitHub Pages custom domain). Add
-#     more origins as a comma-separated list if the frontend is also served
-#     from a second domain.
+#     the API: https://quickquill.ink (the Vercel custom domain). Add more
+#     origins as a comma-separated list if the frontend is also served from a
+#     second domain.
 
 services:
   - type: web
@@ -60,7 +55,7 @@ services:
         value: /app/dictionary.db
       - key: DB_SSLMODE
         value: require
-      # Frontend origin (GitHub Pages custom domain) allowed to call this backend.
+      # Frontend origin (Vercel custom domain) allowed to call this backend.
       # GitHub auto-redirects www.quickquill.ink to the apex, so only the apex
       # is needed here.
       - key: CORS_ALLOWED_ORIGINS
@@ -81,22 +76,6 @@ services:
         fromDatabase:
           name: quickquill-db
           property: password
-
-  - type: cron
-    name: quickquill-keepalive
-    runtime: docker
-    repo: https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker
-    region: oregon
-    schedule: "*/10 * * * *"
-    dockerfilePath: ./keepalive/Dockerfile
-    dockerContext: ./keepalive
-    plan: free
-    envVars:
-      # Backend must be reachable over HTTPS from this cron job. The custom
-      # domain is used rather than the .onrender.com URL so this survives DNS
-      # changes on the Render service.
-      - key: PING_URL
-        value: https://api.quickquill.ink
 
 databases:
   - name: quickquill-db

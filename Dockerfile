@@ -4,7 +4,7 @@
 # bakes the SQLite dictionary (dictionary.db) into the runtime image. Render
 # builds this Dockerfile directly via render.yaml; the container listens on
 # :8080. The Angular frontend is not part of this image — it is served from
-# GitHub Pages (see .github/workflows/github-pages.yml).
+# Vercel.
 #
 # The dictionary itself is NOT committed to the repo (155MB): it is published
 # as GitHub release asset "dictionary-common.db" and pulled during the build,
