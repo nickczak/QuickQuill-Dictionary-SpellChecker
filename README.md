@@ -4,7 +4,7 @@
 <p align="center">
   <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/nickczak/QuickQuill-Dictionary-SpellChecker/ci.yml?label=Build%20%26%20Test&logo=github" alt="Build & Test"></a>
   <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/render-deploy.yml"><img src="https://img.shields.io/github/actions/workflow/status/nickczak/QuickQuill-Dictionary-SpellChecker/render-deploy.yml?label=Backend%20Deploy&logo=render" alt="Backend Deploy"></a>
-  <a href="https://vercel.com/"><img src="https://img.shields.io/badge/frontend-Vercel-black?logo=vercel" alt="Frontend Deploy"></a>
+  <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/actions/workflows/vercel-deploy.yml"><img src="https://img.shields.io/github/actions/workflow/status/nickczak/QuickQuill-Dictionary-SpellChecker/vercel-deploy.yml?label=Frontend%20Deploy&logo=vercel" alt="Frontend Deploy"></a>
   <a href="https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/releases"><img src="https://img.shields.io/github/v/release/nickczak/QuickQuill-Dictionary-SpellChecker?color=purple&cachebust=1" alt="Release">
   <a href="https://quickquill.ink"><img src="https://img.shields.io/badge/website-quickquill.ink-black" alt="Website"></a>
 </p>
