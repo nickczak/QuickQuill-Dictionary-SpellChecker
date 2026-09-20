@@ -3,7 +3,7 @@ build/
 engine/build/
 studio/build/
 studio/.gradle/
-.dictionary.db
+dictionary.db
 *.db-shm
 *.db-wal
 .git

@@ -4,8 +4,8 @@
 #
 # Deploy: in the Render dashboard, create a new Blueprint pointing at this
 # repo (or `render blueprint` from the CLI). Render provisions the managed
-# Postgres and the backend web service below and auto-redeploys them on push
-# to main.
+# Postgres and the backend web service below. Deployments are triggered by
+# the repository's Render GitHub Actions workflow.
 #
 # Notes:
 #   * Render builds ./Dockerfile directly. A multi-stage Dockerfile is fine —
@@ -56,8 +56,7 @@ services:
       - key: DB_SSLMODE
         value: require
       # Frontend origin (Vercel custom domain) allowed to call this backend.
-      # GitHub auto-redirects www.quickquill.ink to the apex, so only the apex
-      # is needed here.
+      # Keep the API's allowed origin aligned with the Vercel production domain.
       - key: CORS_ALLOWED_ORIGINS
         value: https://quickquill.ink
       # Render's connectionString is a non-JDBC postgres:// URL; it is the

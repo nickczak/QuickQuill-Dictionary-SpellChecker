@@ -26,7 +26,7 @@ QuickQuill is a full-stack dictionary and spell-check application. The core engi
     - Examples
     - Forms/inflections and etymology
 
-> **Note:** The live deployment on Render's free tier ships the committed `dictionary.db` (baked into the backend image). The full database supports **over 1.28 million words** at the same speed — see the [analytics](#analytics) section below. The only words cut are obscure, obsolete word forms (rare plurals, scientific jargon, archaic inflections, etc.) — no common English vocabulary was removed.
+> **Note:** The production Docker image downloads and verifies the release dictionary before baking it into the Render image. The full database supports **over 1.28 million words** at the same speed — see the [analytics](#analytics) section below. The only words cut are obscure, obsolete word forms (rare plurals, scientific jargon, archaic inflections, etc.) — no common English vocabulary was removed.
 
 <p align="center"><img src="showcase-desktop.gif" alt="QuickQuill Showcase" width=800></p>
 
@@ -77,7 +77,7 @@ https://www.dropbox.com/home/dictionary-db-sql/dictionary-db?preview=dictionary.
 Then place `dictionary.db` in the project root.
 
 ### Tech Stack
-  - **Backend:** Java 22, Spring Boot 4.1, Spring Data JPA, Spring Security Crypto, Foreign Function & Memory API (Panama FFM)
+  - **Backend:** Java 25, Spring Boot 4.1, Spring Data JPA, Spring Security Crypto, Foreign Function & Memory API (Panama FFM)
   - **Engine:** C++17, SQLite3, nlohmann/json, CMake, vcpkg
   - **Database:** PostgreSQL 16 (user data), SQLite (dictionary)
   - **Frontend:** Angular 21, RxJS, TypeScript
@@ -97,7 +97,7 @@ Then place `dictionary.db` in the project root.
 │       ├── config/
 │       ├── controller/     # REST endpoints
 │       ├── engine/         # FFM bridge to C++
-│       ├── model/          # JPA entities (User, Session, Note)
+│       ├── model/          # JPA entities (User, Session, Document)
 │       ├── repository/     # Spring Data repos
 │       └── service/        # AuthService, etc.
 └── web/             
@@ -213,14 +213,14 @@ cmake --build engine/build
 ---
 ## Deployment
 
-The app is split across two hosts: the **Spring Boot backend runs on Render** and the **Angular frontend is served from Vercel**. Nothing self-hosted is required anymore (no VPS, Docker Hub image pushes, or nginx — the old `deploy.yml`, `compose.prod.yml` and `scripts/deploy_docker.sh` stack was removed).
+The app is split across two hosts: the **Spring Boot backend runs on Render** and the **Angular frontend is served from Vercel**.
 
 ### Backend → Render
 
-1. In the Render dashboard (*New → Blueprint*), connect this repo. Render provisions the managed PostgreSQL database and the `quickquill-backend` web service from [`render.yaml`](render.yaml) and auto-redeploys on pushes to `main`.
+1. In the Render dashboard (*New → Blueprint*), connect this repo. Render provisions the managed PostgreSQL database and the `quickquill-backend` web service from [`render.yaml`](render.yaml). Deployments are triggered and verified by the Render GitHub Actions workflow.
 2. Give the service a custom domain: in **Render → quickquill-backend → Settings → Custom Domains** add `api.quickquill.ink` (Render issues the TLS cert). Then add the DNS record below.
 3. The blueprint sets `CORS_ALLOWED_ORIGINS=https://quickquill.ink` so the frontend (served from that domain) may call the API.
-4. The SQLite dictionary is **not** committed to the repo. It is published as the GitHub release asset `dictionary-common.db`; the Dockerfile downloads it during the build, verifies its SHA256, layers the custom QuickQuill entries on top via `scripts/import_extras.py`, and bakes the result into the image (Render's free web instances have no persistent disk). To serve a different dictionary, upload the new `.db` to a release and bump `DICTIONARY_DB_URL`/`DICTIONARY_DB_SHA256` in `Dockerfile`.
+4. The production SQLite dictionary is published as the GitHub release asset `dictionary-common.db`; the Dockerfile downloads it during the build, verifies its SHA256, layers the custom QuickQuill entries on top via `scripts/import_extras.py`, and bakes the result into the image (Render's free web instances have no persistent disk). To serve a different dictionary, upload the new `.db` to a release and bump `DICTIONARY_DB_URL`/`DICTIONARY_DB_SHA256` in `Dockerfile`.
 5. Free web instances may sleep after periods without traffic.
 6. For the **Backend Deploy** badge to reflect the real Render state, set the following in **GitHub → Settings → Secrets and variables → Actions**:
    - **Secret** `RENDER_API_KEY` — Render → Account Settings → API Keys
