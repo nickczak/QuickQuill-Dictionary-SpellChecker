@@ -23,6 +23,7 @@ public class WordEngine {
   private static MethodHandle SUGGEST_HANDLE;
   private static MethodHandle SYNONYM_HANDLE;
   private static MethodHandle AUTOFILL_HANDLE;
+  private static MethodHandle WOTD_HANDLE;
 
   static {
     try {
@@ -70,6 +71,15 @@ public class WordEngine {
                   ValueLayout.ADDRESS,
                   ValueLayout.ADDRESS,
                   ValueLayout.ADDRESS,
+                  ValueLayout.ADDRESS,
+                  ValueLayout.JAVA_INT));
+
+      WOTD_HANDLE =
+          LINKER.downcallHandle(
+              LOOKUP.find("qq_wotd").orElseThrow(),
+              FunctionDescriptor.of(
+                  ValueLayout.JAVA_INT,
+                  ValueLayout.JAVA_LONG,
                   ValueLayout.ADDRESS,
                   ValueLayout.JAVA_INT));
     } catch (Exception e) {
@@ -131,6 +141,20 @@ public class WordEngine {
       return len >= 0 ? readString(buf, len) : "";
     } catch (Throwable e) {
       throw new RuntimeException("autofill failed", e);
+    }
+  }
+
+  /**
+   * Deterministic per-day word. dayNumber is typically LocalDate.toEpochDay(); the same day always
+   * maps to the same dictionary entry.
+   */
+  public static String wordOfTheDay(long dayNumber) {
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment buf = arena.allocate(BUF_SIZE);
+      int len = (int) WOTD_HANDLE.invoke(dayNumber, buf, BUF_SIZE);
+      return len >= 0 ? readString(buf, len) : "";
+    } catch (Throwable e) {
+      throw new RuntimeException("word-of-the-day failed", e);
     }
   }
 

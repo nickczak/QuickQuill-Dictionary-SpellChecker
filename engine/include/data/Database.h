@@ -55,6 +55,15 @@ public:
   WordInfo getInfo(dct::WordId word_id) const;
   std::vector<dct::WordId> findMatchingWordIds(std::string_view word) const;
 
+  /**
+   * Deterministic per-day word: the same day number (e.g. days since epoch)
+   * always yields the same lemma, and consecutive days are spread across the
+   * table instead of walked linearly. Only words with at least one sense are
+   * eligible so the daily word always has a definition. Empty string when the
+   * database is empty or the day number is negative.
+   */
+  std::string pickLemmaForDay(long dayNumber) const;
+
 private:
   struct Sqlite3Deleter
   {

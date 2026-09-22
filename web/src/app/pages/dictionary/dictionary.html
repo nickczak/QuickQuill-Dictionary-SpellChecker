@@ -27,8 +27,7 @@
 
   <div class="status">
     @if (isLoading()) {
-      <span class="spinner"></span> Looking up... QuickQuill uses Render free tier. The first query
-      may take a few minutes to wake up the server. Please be patient.
+      <span class="spinner"></span> Looking up...
     }
     <span>{{ statusMessage() }}</span>
     @if (showGhostHint() && ghostSuffix()) {

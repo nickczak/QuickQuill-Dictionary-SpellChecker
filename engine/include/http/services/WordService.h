@@ -24,6 +24,12 @@ public:
   ServiceResult search(const std::string &word) const;
   ServiceResult suggest(const std::string &word) const;
   ServiceResult suggestSynonym(const std::string &word) const;
+  /**
+   * Deterministic per-day word: the same day number (e.g. days since epoch)
+   * always yields the same full word entry. 200 on success, 500 when the
+   * dictionary has no words with definitions.
+   */
+  ServiceResult wordOfTheDay(long dayNumber) const;
   // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
   ServiceResult autofill(
       const std::string &prefix,

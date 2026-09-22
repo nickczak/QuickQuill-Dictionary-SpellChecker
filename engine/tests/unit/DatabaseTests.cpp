@@ -1,6 +1,8 @@
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
 #include <filesystem>
+#include <iterator>
 #include <string>
 
 #include "core/Trie.h"
@@ -572,6 +574,72 @@ TEST_CASE("Database::findMatchingWordIds", "[database]")
     auto ids = test.db.findMatchingWordIds("lights");
     REQUIRE(ids.size() == 1);
     CHECK(ids[0].value == wid.value);
+  }
+}
+
+TEST_CASE("Database::pickLemmaForDay", "[database]")
+{
+  SECTION("Database::pickLemmaForDay::empty db returns empty string")
+  {
+    TestDb test;
+    REQUIRE(test.db.pickLemmaForDay(0).empty());
+  }
+
+  SECTION("Database::pickLemmaForDay::negative day number returns empty string")
+  {
+    TestDb test;
+    const auto wid = test.db.insertWord("alpha", "alpha", dct::Frequency{1});
+    test.db.insertSense(wid, "", "first");
+    REQUIRE(test.db.pickLemmaForDay(-1).empty());
+  }
+
+  SECTION("Database::pickLemmaForDay::same day returns same lemma")
+  {
+    TestDb test;
+    const auto a = test.db.insertWord("alpha", "alpha", dct::Frequency{1});
+    test.db.insertSense(a, "", "first");
+    const auto b = test.db.insertWord("bravo", "bravo", dct::Frequency{1});
+    test.db.insertSense(b, "", "second");
+    const auto c = test.db.insertWord("charlie", "charlie", dct::Frequency{1});
+    test.db.insertSense(c, "", "third");
+
+    const auto first = test.db.pickLemmaForDay(20000);
+    REQUIRE_FALSE(first.empty());
+    CHECK(first == test.db.pickLemmaForDay(20000));
+  }
+
+  SECTION("Database::pickLemmaForDay::returns a seeded lemma")
+  {
+    TestDb test;
+    const auto a = test.db.insertWord("alpha", "alpha", dct::Frequency{1});
+    test.db.insertSense(a, "", "first");
+    const auto b = test.db.insertWord("bravo", "bravo", dct::Frequency{1});
+    test.db.insertSense(b, "", "second");
+    const auto c = test.db.insertWord("charlie", "charlie", dct::Frequency{1});
+    test.db.insertSense(c, "", "third");
+
+    const std::string seeded[] = {"alpha", "bravo", "charlie"};
+    for (long day = 0; day <= 100; ++day)
+    {
+      const auto picked = test.db.pickLemmaForDay(day);
+      REQUIRE_FALSE(picked.empty());
+      REQUIRE(std::find(std::begin(seeded), std::end(seeded), picked) != std::end(seeded));
+    }
+  }
+
+  SECTION("Database::pickLemmaForDay::words without senses are never picked")
+  {
+    TestDb test;
+    const auto a = test.db.insertWord("defined", "defined", dct::Frequency{1});
+    test.db.insertSense(a, "", "has a definition");
+    test.db.insertWord("undefined", "undefined", dct::Frequency{1}); // no sense
+
+    for (long day = 0; day <= 100; ++day)
+    {
+      const auto picked = test.db.pickLemmaForDay(day);
+      REQUIRE_FALSE(picked.empty());
+      CHECK(picked == "defined");
+    }
   }
 }
 

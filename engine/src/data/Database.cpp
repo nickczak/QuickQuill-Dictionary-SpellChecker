@@ -507,6 +507,63 @@ WordInfo Database::getInfo(dct::WordId word_id) const
   return info;
 }
 
+std::string Database::pickLemmaForDay(long dayNumber) const
+{
+  if (dayNumber < 0 || isEmpty())
+  {
+    return "";
+  }
+
+  // Count words that actually carry at least one definition.
+  sqlite3_stmt *stmt = nullptr;
+  long count = 0;
+  const char *countSql = "SELECT COUNT(*) FROM words w "
+                         "WHERE EXISTS (SELECT 1 FROM senses s WHERE s.word_id = w.id);";
+  if (sqlite3_prepare_v2(m_db.get(), countSql, -1, &stmt, nullptr) == SQLITE_OK)
+  {
+    if (sqlite3_step(stmt) == SQLITE_ROW)
+    {
+      count = sqlite3_column_int64(stmt, 0);
+    }
+  }
+  if (stmt)
+  {
+    sqlite3_finalize(stmt);
+  }
+  if (count <= 0)
+  {
+    return "";
+  }
+
+  // Multiply by a large odd constant and reduce modulo the count so successive
+  // days map to well-separated rows instead of advancing one row per day.
+  constexpr long kSpread = 2654435761L; // golden-ratio hash constant
+  const long long offset = static_cast<long long>(dayNumber) * kSpread % count;
+
+  std::string lemma;
+  stmt = nullptr;
+  const char *selectSql = "SELECT w.lemma FROM words w "
+                          "WHERE EXISTS (SELECT 1 FROM senses s WHERE s.word_id = w.id) "
+                          "ORDER BY w.id LIMIT 1 OFFSET ?;";
+  if (sqlite3_prepare_v2(m_db.get(), selectSql, -1, &stmt, nullptr) == SQLITE_OK)
+  {
+    sqlite3_bind_int64(stmt, 1, offset);
+    if (sqlite3_step(stmt) == SQLITE_ROW)
+    {
+      const char *text = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0));
+      if (text)
+      {
+        lemma = text;
+      }
+    }
+  }
+  if (stmt)
+  {
+    sqlite3_finalize(stmt);
+  }
+  return lemma;
+}
+
 std::vector<dct::WordId> Database::findMatchingWordIds(std::string_view word) const
 {
   std::vector<dct::WordId> ids;

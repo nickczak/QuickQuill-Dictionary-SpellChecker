@@ -121,6 +121,30 @@ template <typename Fn> int runService(const char *input, char *buf, int buf_size
   }
 }
 
+/**
+ * Run a WordService call that takes only a day number, copying its JSON body
+ * into the caller-provided buffer. Returns the bytes written, or -1 if the
+ * engine is uninitialized or the call threw.
+ */
+template <typename Fn> int runService(long dayNumber, char *buf, int buf_size, Fn call)
+{
+  if (!g_dict || !g_checker)
+  {
+    return -1;
+  }
+
+  try
+  {
+    http::WordService svc(*g_dict, *g_checker);
+    auto result = call(svc);
+    return copyToBuf(result.body, buf, buf_size);
+  }
+  catch (...)
+  {
+    return -1;
+  }
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -204,6 +228,13 @@ extern "C"
         [&](http::WordService &svc) {
           return svc.autofill(prefix, parseJsonArray(history_json), parseJsonArray(suggested_json));
         });
+  }
+
+  int qq_wotd(long day_number, char *buf, int buf_size)
+  {
+    return runService(
+        day_number, buf, buf_size,
+        [&](http::WordService &svc) { return svc.wordOfTheDay(day_number); });
   }
 
 } // extern "C"

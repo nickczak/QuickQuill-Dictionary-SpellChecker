@@ -246,6 +246,11 @@ std::vector<std::string> Dictionary::suggestSynonyms(std::string_view word) cons
   return synonymSuggestions;
 }
 
+std::string Dictionary::wordOfTheDay(long dayNumber) const
+{
+  return db().pickLemmaForDay(dayNumber);
+}
+
 bool Dictionary::contains(std::string_view word) const
 {
   std::string clean = cleanWord(word);

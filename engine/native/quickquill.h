@@ -32,6 +32,7 @@ extern "C"
       const char *suggested_json,
       char *buf,
       int buf_size);
+  int qq_wotd(long day_number, char *buf, int buf_size);
 
 #ifdef __cplusplus
 }

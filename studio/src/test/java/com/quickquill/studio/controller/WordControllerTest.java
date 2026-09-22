@@ -118,4 +118,21 @@ public class WordControllerTest {
           .andExpect(jsonPath("$.completion").value(""));
     }
   }
+
+  @Nested
+  @DisplayName("GET /api/word-of-the-day")
+  class WordOfTheDay {
+
+    @Test
+    void shouldReturnADictionaryWord() throws Exception {
+      mockMvc
+          .perform(get("/api/word-of-the-day"))
+          .andExpect(status().isOk())
+          .andExpect(content().contentTypeCompatibleWith("application/json"))
+          .andExpect(jsonPath("$.lemma").isNotEmpty())
+          .andExpect(jsonPath("$.display_lemma").isNotEmpty())
+          .andExpect(jsonPath("$.query").isNotEmpty())
+          .andExpect(jsonPath("$.senses").isArray());
+    }
+  }
 }

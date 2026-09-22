@@ -54,6 +54,13 @@ export class Api {
     return this.http.get<string[]>(endpoint(`/api/synonym/${this.encodePath(word)}`));
   }
 
+  /** Word of the day — deterministic per calendar day, same shape as a lookup hit. */
+  wordOfTheDay(): Observable<HttpResponse<WordResponse | WordError>> {
+    return this.http.get<WordResponse | WordError>(endpoint('/api/word-of-the-day'), {
+      observe: 'response',
+    });
+  }
+
   autofill(
     word: string,
     searchHistory: string[],

@@ -140,4 +140,24 @@ ServiceResult WordService::suggestSynonym(const std::string &word) const
   nlohmann::json body = synonyms;
   return {body.dump(), 200};
 }
+
+ServiceResult WordService::wordOfTheDay(long dayNumber) const
+{
+  const std::string lemma = m_dict.wordOfTheDay(dayNumber);
+  if (lemma.empty())
+  {
+    nlohmann::json body = {{"error", "No words available"}};
+    return {body.dump(), 500};
+  }
+
+  const WordInfo info = m_dict.getWordInfo(lemma);
+  if (info.lemma.empty())
+  {
+    nlohmann::json body = {{"error", "No words available"}};
+    return {body.dump(), 500};
+  }
+
+  // Echo the lemma as `query` so the frontend can treat it like a lookup hit.
+  return {toWordJson(info, lemma), 200};
+}
 } // end namespace http

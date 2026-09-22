@@ -1,11 +1,12 @@
 import { Component, OnInit, OnDestroy, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpResponse, HttpErrorResponse } from '@angular/common/http';
-import { Subject, Subscription, debounceTime, switchMap, of, map } from 'rxjs';
+import { Subject, Subscription, debounceTime, switchMap, of, map, take } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { Api } from '../../services/api';
 import { Storage } from '../../services/storage';
 import { Auth } from '../../services/auth';
+import { Wotd } from '../../services/wotd';
 import { WordResponse, WordNotFound, WordError } from '../../models/word.models';
 import { Chip } from '../../shared/chip/chip';
 import { ExpandableList } from '../../shared/expandable-list/expandable-list';
@@ -20,6 +21,7 @@ export class Dictionary implements OnInit, OnDestroy {
   private api = inject(Api);
   private storage = inject(Storage);
   private auth = inject(Auth);
+  private wotd = inject(Wotd);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
 
@@ -47,7 +49,9 @@ export class Dictionary implements OnInit, OnDestroy {
   private suggestSub?: Subscription;
   private ghostSub?: Subscription;
   private lookupSub?: Subscription;
+  private wotdSub?: Subscription;
   private ghostEpoch = 0;
+  private autoRanWotd = false;
 
   ngOnInit() {
     this.loadUserLists();
@@ -146,12 +150,25 @@ export class Dictionary implements OnInit, OnDestroy {
         this.lookup();
       }
     });
+
+    // Auto-run the day's word only when the user hasn't searched and the URL
+    // didn't arrive with an explicit word. Uses the replayed boot fetch so this
+    // behaves the same whether the daily word resolved before or after mount.
+    this.wotdSub = this.wotd.settled.pipe(take(1)).subscribe((dailyWord) => {
+      if (!dailyWord || this.autoRanWotd) return;
+      this.autoRanWotd = true;
+      if (!this.searchInput() && !this.route.snapshot.queryParamMap.has('word')) {
+        this.searchInput.set(dailyWord.lemma || dailyWord.query || '');
+        this.lookup();
+      }
+    });
   }
 
   ngOnDestroy() {
     this.suggestSub?.unsubscribe();
     this.ghostSub?.unsubscribe();
     this.lookupSub?.unsubscribe();
+    this.wotdSub?.unsubscribe();
   }
 
   onInput(event: Event) {

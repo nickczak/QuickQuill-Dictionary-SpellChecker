@@ -28,6 +28,13 @@ public:
   std::vector<std::string> suggestFromPrefix(std::string_view word) const;
   std::vector<std::string> suggestSpelling(std::string_view word) const;
 
+  /**
+   * Deterministic per-day word: the same day number (e.g. days since epoch)
+   * always yields the same lemma for every user. Empty string when the
+   * dictionary has no words with definitions.
+   */
+  std::string wordOfTheDay(long dayNumber) const;
+
   // Ghost Autofill: returns best completion for prefix, searching history→suggested→cache→db
   // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
   std::string autofillFromTrie(

@@ -119,6 +119,30 @@ describe('Api', () => {
 
       await promise;
     });
+
+    it('wordOfTheDay GETs the endpoint and decodes the response body', async () => {
+      const promise = firstValueFrom(api.wordOfTheDay());
+
+      const req = httpMock.expectOne('/api/word-of-the-day');
+      expect(req.request.method).toBe('GET');
+      req.flush(HELLO_WORD, { status: 200, statusText: 'OK' });
+
+      const response = await promise;
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(HELLO_WORD);
+    });
+
+    it('wordOfTheDay surfaces a 500 server error with the body attached', async () => {
+      const promise = firstValueFrom(api.wordOfTheDay());
+
+      const req = httpMock.expectOne('/api/word-of-the-day');
+      req.flush({ error: 'No words available' }, { status: 500, statusText: 'Server Error' });
+
+      await expect(promise).rejects.toMatchObject({
+        status: 500,
+        error: { error: 'No words available' },
+      });
+    });
   });
 
   describe('auth endpoints', () => {

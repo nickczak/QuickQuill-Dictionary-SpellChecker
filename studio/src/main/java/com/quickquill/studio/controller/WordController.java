@@ -1,6 +1,7 @@
 package com.quickquill.studio.controller;
 
 import com.quickquill.studio.engine.WordEngine;
+import java.time.LocalDate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -55,6 +56,19 @@ public class WordController {
   }
 
   /**
+   * Word of the day: the same word for every user on a given calendar day, rolling over at
+   * midnight. Mirrors a normal lookup payload.
+   */
+  @GetMapping("/word-of-the-day")
+  public ResponseEntity<String> wordOfTheDay() {
+    long day = LocalDate.now().toEpochDay();
+    String json = WordEngine.wordOfTheDay(day);
+    return ResponseEntity.status(wotdStatusFor(json))
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(json);
+  }
+
+  /**
    * Autocomplete for a prefix. Passes the user's history and suggested words as query params so the
    * engine can prioritize familiar completions.
    */
@@ -82,6 +96,19 @@ public class WordController {
         return HttpStatus.BAD_REQUEST.value();
       }
       return HttpStatus.OK.value();
+    } catch (Exception e) {
+      return HttpStatus.INTERNAL_SERVER_ERROR.value();
+    }
+  }
+
+  /**
+   * Status mapping for the word of the day: unlike a lookup, an empty dictionary is a server-side
+   * condition, so the engine's {"error": ...} payload becomes 500 instead of statusFor's 400.
+   */
+  private int wotdStatusFor(String json) {
+    try {
+      JsonNode node = jsonMapper.readTree(json);
+      return node.has("error") ? HttpStatus.INTERNAL_SERVER_ERROR.value() : HttpStatus.OK.value();
     } catch (Exception e) {
       return HttpStatus.INTERNAL_SERVER_ERROR.value();
     }

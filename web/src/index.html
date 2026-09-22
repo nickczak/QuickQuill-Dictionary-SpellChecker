@@ -12,8 +12,64 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
+
+    <!-- Boot splash: inline styles so it paints before any CSS bundle loads. -->
+    <style>
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background: #000;
+        transition: opacity 0.4s ease;
+      }
+      #app-splash.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #app-splash .splash-quill {
+        width: min(240px, 50vw);
+        filter: brightness(0) invert(1);
+        animation: splash-pulse 1.6s ease-in-out infinite;
+      }
+      #app-splash .splash-note {
+        color: #b6b6b6;
+        font-size: 13px;
+        max-width: min(420px, 80vw);
+        text-align: center;
+        padding: 0 12px;
+        line-height: 1.5;
+      }
+      @keyframes splash-pulse {
+        0%,
+        100% {
+          opacity: 0.4;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #app-splash,
+        #app-splash .splash-quill {
+          animation: none;
+          transition: none;
+        }
+      }
+    </style>
   </head>
   <body>
+    <div id="app-splash" role="status" aria-label="Loading QuickQuill">
+      <img class="splash-quill" src="/assets/quill.png" alt="QuickQuill" />
+      <div class="splash-note">
+        Waking up QuickQuill... The Render free tier may take a few minutes to start the server.
+        Please be patient.
+      </div>
+    </div>
     <app-root></app-root>
   </body>
 </html>
