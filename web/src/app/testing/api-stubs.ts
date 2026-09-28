@@ -14,6 +14,7 @@ export function createApiStub(): Api {
   // Partial<Api> makes every Api method optional, so we can override only the ones we want in tests.
   const stub: Partial<Api> = {
     lookup: () => of(new HttpResponse({ body: HELLO_WORD, status: 200 })),
+    wordOfTheDay: () => of(new HttpResponse({ body: HELLO_WORD, status: 200 })),
     suggest: () => of(['hello']),
     synonym: () => of(['hi', 'hey']),
     autofill: () => of(AUTOFILL_RESPONSE),

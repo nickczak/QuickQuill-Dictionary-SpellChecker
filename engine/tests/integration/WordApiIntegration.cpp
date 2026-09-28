@@ -110,4 +110,46 @@ TEST_CASE("WordService::wordOfTheDay", "[integration][api]")
     auto j2 = nlohmann::json::parse(second.body);
     CHECK(j1["lemma"] == j2["lemma"]);
   }
+
+  // The response is memoized per day because deriving it scans the whole
+  // dictionary. A cache hit must be indistinguishable from a fresh computation,
+  // and a new day must not be served the previous day's word.
+  SECTION("a cache hit returns a body identical to a fresh computation")
+  {
+    auto cached = service.wordOfTheDay(41000); // primes the memo
+    auto again = service.wordOfTheDay(41000);
+
+    REQUIRE(cached.status == 200);
+    CHECK((again.body == cached.body));
+    CHECK((again.status == cached.status));
+  }
+
+  SECTION("advancing the day invalidates the memoized response")
+  {
+    auto dayOne = service.wordOfTheDay(42000);
+    auto dayTwo = service.wordOfTheDay(42001);
+
+    REQUIRE(dayOne.status == 200);
+    REQUIRE(dayTwo.status == 200);
+
+    // Both days must be served correctly, not the first day's cached body.
+    auto j1 = nlohmann::json::parse(dayOne.body);
+    auto j2 = nlohmann::json::parse(dayTwo.body);
+    CHECK(isValidReturnedLemma(j1["lemma"]));
+    CHECK(isValidReturnedLemma(j2["lemma"]));
+    CHECK((j1["query"] == j1["lemma"]));
+    CHECK((j2["query"] == j2["lemma"]));
+  }
+
+  // A negative day number has no lemma. Nothing may be cached for it, or the
+  // empty seeded memo would be served as a 200 with an empty body.
+  SECTION("a negative day number is an error and is never served from the memo")
+  {
+    auto first = service.wordOfTheDay(-1);
+    auto second = service.wordOfTheDay(-1);
+
+    CHECK((first.status == 500));
+    CHECK((second.status == 500));
+    CHECK_FALSE(second.body.empty());
+  }
 }

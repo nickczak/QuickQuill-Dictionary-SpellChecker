@@ -54,11 +54,20 @@ export class Api {
     return this.http.get<string[]>(endpoint(`/api/synonym/${this.encodePath(word)}`));
   }
 
-  /** Word of the day — deterministic per calendar day, same shape as a lookup hit. */
+  /**
+   * Word of the day — deterministic per calendar day, same shape as a lookup hit.
+   * The daily word gates the loading splash, so this deliberately allows far more
+   * time than the auth calls: a cold Render instance can take the better part of
+   * a minute to start, and cutting the request short would drop the splash on an
+   * empty page. Kept above App.SPLASH_MAX_MS so the splash, not the request, is
+   * what gives up first.
+   */
   wordOfTheDay(): Observable<HttpResponse<WordResponse | WordError>> {
-    return this.http.get<WordResponse | WordError>(endpoint('/api/word-of-the-day'), {
-      observe: 'response',
-    });
+    return this.http
+      .get<WordResponse | WordError>(endpoint('/api/word-of-the-day'), {
+        observe: 'response',
+      })
+      .pipe(timeout(Api.WORD_OF_DAY_TIMEOUT_MS));
   }
 
   autofill(
@@ -85,6 +94,10 @@ export class Api {
   // AUTH_TIMEOUT_MS guards the auth calls below: without it, a slow or hung
   // backend leaves the login/signup page stuck on its disabled submit button.
   private static readonly AUTH_TIMEOUT_MS = 15000;
+
+  // See wordOfTheDay(): sized to outlast the boot splash so the splash is what
+  // gives up on a dead backend, rather than the request failing under it.
+  private static readonly WORD_OF_DAY_TIMEOUT_MS = 70000;
 
   signup(email: string, password: string, displayName: string): Observable<AuthResponse> {
     const body = new HttpParams()

@@ -6,6 +6,22 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <mutex>
+
+namespace
+{
+// The daily word is a per-day constant, but deriving it is expensive: it counts
+// every word that has a sense, walks an OFFSET into that set, then loads the
+// entry. Against a large dictionary that runs about a second per request for an
+// answer that cannot change until the next day, so the finished response is
+// memoized. WordService is constructed per call by the FFM bridge, so the cache
+// is process-global rather than a member. Only successful lookups are stored --
+// pinning a transient engine failure for a whole day would be worse than
+// recomputing it.
+std::mutex g_wotdMutex;
+long g_wotdDay = 0;
+http::ServiceResult g_wotdResult;
+} // end namespace
 
 namespace http
 {
@@ -143,21 +159,35 @@ ServiceResult WordService::suggestSynonym(const std::string &word) const
 
 ServiceResult WordService::wordOfTheDay(long dayNumber) const
 {
-  const std::string lemma = m_dict.wordOfTheDay(dayNumber);
-  if (lemma.empty())
   {
-    nlohmann::json body = {{"error", "No words available"}};
-    return {body.dump(), 500};
+    std::scoped_lock lock(g_wotdMutex);
+    // A populated body is what marks the entry valid, so an unseeded cache can
+    // never satisfy a lookup (day 0 is otherwise indistinguishable from unset).
+    if (g_wotdDay == dayNumber && !g_wotdResult.body.empty())
+    {
+      return g_wotdResult;
+    }
   }
 
-  const WordInfo info = m_dict.getWordInfo(lemma);
-  if (info.lemma.empty())
+  const std::string lemma = m_dict.wordOfTheDay(dayNumber);
+  WordInfo info;
+  if (!lemma.empty())
+  {
+    info = m_dict.getWordInfo(lemma);
+  }
+
+  if (lemma.empty() || info.lemma.empty())
   {
     nlohmann::json body = {{"error", "No words available"}};
     return {body.dump(), 500};
   }
 
   // Echo the lemma as `query` so the frontend can treat it like a lookup hit.
-  return {toWordJson(info, lemma), 200};
+  ServiceResult result = {toWordJson(info, lemma), 200};
+
+  std::scoped_lock lock(g_wotdMutex);
+  g_wotdDay = dayNumber;
+  g_wotdResult = result;
+  return result;
 }
 } // end namespace http

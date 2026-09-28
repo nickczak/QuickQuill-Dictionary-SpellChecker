@@ -51,7 +51,6 @@ export class Dictionary implements OnInit, OnDestroy {
   private lookupSub?: Subscription;
   private wotdSub?: Subscription;
   private ghostEpoch = 0;
-  private autoRanWotd = false;
 
   ngOnInit() {
     this.loadUserLists();
@@ -127,16 +126,7 @@ export class Dictionary implements OnInit, OnDestroy {
         } else if (status === 400) {
           this.error.set(body as WordError);
         } else if (status >= 200 && status < 300) {
-          this.result.set(body as WordResponse);
-          const canonical = this.storage.displayWord(
-            (body as WordResponse).display_lemma || (body as WordResponse).query || word,
-          );
-          if (canonical) {
-            this.searchInput.set(canonical);
-            this.prependHistory(canonical);
-            this.recordSearchToBackend(canonical);
-            this.storeSuggestionsForQuery(canonical);
-          }
+          this.applyResult(body as WordResponse, word);
         } else {
           this.error.set(body as WordError);
         }
@@ -151,16 +141,15 @@ export class Dictionary implements OnInit, OnDestroy {
       }
     });
 
-    // Auto-run the day's word only when the user hasn't searched and the URL
-    // didn't arrive with an explicit word. Uses the replayed boot fetch so this
+    // Seed the day's word straight from the boot fetch. The word-of-the-day
+    // payload is a complete lookup response, so rendering it here means the
+    // loading splash hands over an already-populated page instead of kicking
+    // off a second identical request. Wotd replays the settled value, so this
     // behaves the same whether the daily word resolved before or after mount.
     this.wotdSub = this.wotd.settled.pipe(take(1)).subscribe((dailyWord) => {
-      if (!dailyWord || this.autoRanWotd) return;
-      this.autoRanWotd = true;
-      if (!this.searchInput() && !this.route.snapshot.queryParamMap.has('word')) {
-        this.searchInput.set(dailyWord.lemma || dailyWord.query || '');
-        this.lookup();
-      }
+      if (!dailyWord) return;
+      if (this.searchInput() || this.route.snapshot.queryParamMap.has('word')) return;
+      this.applyResult(dailyWord, dailyWord.query || dailyWord.lemma);
     });
   }
 
@@ -330,6 +319,23 @@ export class Dictionary implements OnInit, OnDestroy {
     this.notFoundQuery.set('');
     this.error.set(null);
     this.statusMessage.set('');
+  }
+
+  /**
+   * Renders a successful lookup payload. Shared by the HTTP lookup and the
+   * word-of-the-day seed, which returns the same response shape -- so the daily
+   * word can be displayed without a second round trip to the backend.
+   */
+  private applyResult(payload: WordResponse, queryWord: string): void {
+    this.result.set(payload);
+
+    const canonical = this.storage.displayWord(payload.display_lemma || payload.query || queryWord);
+    if (!canonical) return;
+
+    this.searchInput.set(canonical);
+    this.prependHistory(canonical);
+    this.recordSearchToBackend(canonical);
+    this.storeSuggestionsForQuery(canonical);
   }
 
   getSynonyms(): string[] {
