@@ -133,6 +133,9 @@ export class Dictionary implements OnInit, OnDestroy {
         this.isLoading.set(false);
       });
 
+    const hasDeepLink = this.route.snapshot.queryParamMap.has('word');
+    if (!hasDeepLink && !this.wotd.ready()) this.isLoading.set(true);
+
     this.route.queryParams.subscribe((params) => {
       const word = params['word'];
       if (word) {
@@ -141,13 +144,16 @@ export class Dictionary implements OnInit, OnDestroy {
       }
     });
 
-    // Seed the day's word straight from the boot fetch. The word-of-the-day
-    // payload is a complete lookup response, so rendering it here means the
-    // loading splash hands over an already-populated page instead of kicking
-    // off a second identical request. Wotd replays the settled value, so this
-    // behaves the same whether the daily word resolved before or after mount.
+    // The WOTD response is already a complete lookup payload, so use it to
+    // populate the search and result immediately without making a duplicate call.
+    // Wotd replays its settled value when the backend responds before mount.
     this.wotdSub = this.wotd.settled.pipe(take(1)).subscribe((dailyWord) => {
-      if (!dailyWord) return;
+      if (!dailyWord) {
+        if (!this.searchInput() && !this.route.snapshot.queryParamMap.has('word')) {
+          this.isLoading.set(false);
+        }
+        return;
+      }
       if (this.searchInput() || this.route.snapshot.queryParamMap.has('word')) return;
       this.applyResult(dailyWord, dailyWord.query || dailyWord.lemma);
     });
@@ -322,12 +328,12 @@ export class Dictionary implements OnInit, OnDestroy {
   }
 
   /**
-   * Renders a successful lookup payload. Shared by the HTTP lookup and the
-   * word-of-the-day seed, which returns the same response shape -- so the daily
-   * word can be displayed without a second round trip to the backend.
+   * Renders a successful lookup payload. Shared by HTTP lookups and the daily
+   * word response, which already contains the full entry.
    */
   private applyResult(payload: WordResponse, queryWord: string): void {
     this.result.set(payload);
+    this.isLoading.set(false);
 
     const canonical = this.storage.displayWord(payload.display_lemma || payload.query || queryWord);
     if (!canonical) return;

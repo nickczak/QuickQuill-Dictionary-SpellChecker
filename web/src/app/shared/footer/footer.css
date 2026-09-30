@@ -46,3 +46,7 @@
   line-height: 1.6;
   margin: 0;
 }
+
+.footer-disclaimer + .footer-disclaimer {
+  margin-top: 6px;
+}

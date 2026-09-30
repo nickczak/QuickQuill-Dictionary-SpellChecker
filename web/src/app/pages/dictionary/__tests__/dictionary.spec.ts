@@ -53,9 +53,9 @@ describe('Dictionary word of the day', () => {
     clearStoredSession();
   });
 
-  it('renders the daily word from the boot payload without a second lookup', () => {
+  it('automatically searches the daily word from the boot payload without a duplicate lookup', () => {
     const lookup = configure();
-    // Settle before mount, matching the common case where the splash is still up.
+    // Settle before mount to cover a fast response before the page subscribes.
     wotd.settle(HELLO_WORD);
 
     const fixture = mount();
@@ -65,16 +65,16 @@ describe('Dictionary word of the day', () => {
     expect(dict.searchInput()).toBe('hello');
     expect(dict.getDefinitions()).toEqual(['[interjection] used as a greeting']);
     expect(dict.isLoading()).toBe(false);
-    // The payload already carried the entry; re-requesting it would be the
-    // empty-page-then-fill-in gap the boot splash is supposed to prevent.
+    // The WOTD payload already carries the entry, so a second lookup is unnecessary.
     expect(lookup).not.toHaveBeenCalled();
   });
 
-  it('renders the daily word when it settles after the component mounts', () => {
+  it('fills the search box and shows the daily result while loading after mount', () => {
     const lookup = configure();
     const fixture = mount();
 
     expect(fixture.componentInstance.result()).toBeNull();
+    expect(fixture.componentInstance.isLoading()).toBe(true);
 
     wotd.settle(HELLO_WORD);
     fixture.detectChanges();

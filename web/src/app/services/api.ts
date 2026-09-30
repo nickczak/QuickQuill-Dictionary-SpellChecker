@@ -56,11 +56,8 @@ export class Api {
 
   /**
    * Word of the day — deterministic per calendar day, same shape as a lookup hit.
-   * The daily word gates the loading splash, so this deliberately allows far more
-   * time than the auth calls: a cold Render instance can take the better part of
-   * a minute to start, and cutting the request short would drop the splash on an
-   * empty page. Kept above App.SPLASH_MAX_MS so the splash, not the request, is
-   * what gives up first.
+   * Allow time for a cold backend instance to start before treating the request
+   * as unavailable; the dictionary shows a loading state while it waits.
    */
   wordOfTheDay(): Observable<HttpResponse<WordResponse | WordError>> {
     return this.http
@@ -95,8 +92,7 @@ export class Api {
   // backend leaves the login/signup page stuck on its disabled submit button.
   private static readonly AUTH_TIMEOUT_MS = 15000;
 
-  // See wordOfTheDay(): sized to outlast the boot splash so the splash is what
-  // gives up on a dead backend, rather than the request failing under it.
+  // See wordOfTheDay(): this timeout allows for a cold backend start.
   private static readonly WORD_OF_DAY_TIMEOUT_MS = 70000;
 
   signup(email: string, password: string, displayName: string): Observable<AuthResponse> {

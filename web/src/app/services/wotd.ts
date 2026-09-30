@@ -4,9 +4,8 @@ import { Api } from './api';
 import { WordError, WordResponse } from '../models/word.models';
 
 /**
- * App-boot word of the day. Fetched once when the app starts (the "user
- * connects" moment) so the loading splash can wait for it and the dictionary
- * page can auto-run the daily word. Any non-200 response or network error
+ * App-boot word of the day. Fetched once when the app starts so the dictionary
+ * can automatically show the daily word. Any non-200 response or network error
  * settles the fetch with no word — the app must never block on the daily word.
  */
 @Injectable({
