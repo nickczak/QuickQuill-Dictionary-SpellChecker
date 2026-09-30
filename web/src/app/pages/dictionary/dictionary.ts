@@ -31,6 +31,8 @@ export class Dictionary implements OnInit, OnDestroy {
   notFoundQuery = signal('');
   error = signal<WordError | null>(null);
   isLoading = signal(false);
+  isLoadingWordOfTheDay = signal(false);
+  isWordOfTheDay = signal(false);
   statusMessage = signal('');
   liveSuggestedWords = signal<string[]>([]);
   ghostCompletion = signal('');
@@ -59,6 +61,8 @@ export class Dictionary implements OnInit, OnDestroy {
       .pipe(debounceTime(300))
       .subscribe((word) => this.fetchSuggestions(word));
 
+    // Ghost completion is a separate, debounced request from lookup and spelling
+    // suggestions. switchMap cancels an older autofill request when newer text arrives.
     this.ghostSub = this.ghost$
       .pipe(
         debounceTime(50),
@@ -75,11 +79,14 @@ export class Dictionary implements OnInit, OnDestroy {
         }),
       )
       .subscribe(({ data, epoch }) => {
+        // Ignore responses that finished after the user changed or submitted the text.
         if (epoch !== this.ghostEpoch) return;
         if (!data) {
           this.clearGhostText();
           return;
         }
+        // Keep the user's input intact and render only the untyped suffix on top
+        // of it; include text before the last space for multi-word input.
         const typed = this.ghostTyped();
         const completion = data.completion || '';
         const lastSpace = typed.lastIndexOf(' ');
@@ -134,11 +141,15 @@ export class Dictionary implements OnInit, OnDestroy {
       });
 
     const hasDeepLink = this.route.snapshot.queryParamMap.has('word');
-    if (!hasDeepLink && !this.wotd.ready()) this.isLoading.set(true);
+    if (!hasDeepLink && !this.wotd.ready()) {
+      this.isLoading.set(true);
+      this.isLoadingWordOfTheDay.set(true);
+    }
 
     this.route.queryParams.subscribe((params) => {
       const word = params['word'];
       if (word) {
+        this.isLoadingWordOfTheDay.set(false);
         this.searchInput.set(word);
         this.lookup();
       }
@@ -151,11 +162,12 @@ export class Dictionary implements OnInit, OnDestroy {
       if (!dailyWord) {
         if (!this.searchInput() && !this.route.snapshot.queryParamMap.has('word')) {
           this.isLoading.set(false);
+          this.isLoadingWordOfTheDay.set(false);
         }
         return;
       }
       if (this.searchInput() || this.route.snapshot.queryParamMap.has('word')) return;
-      this.applyResult(dailyWord, dailyWord.query || dailyWord.lemma);
+      this.applyResult(dailyWord, dailyWord.query || dailyWord.lemma, true);
     });
   }
 
@@ -169,6 +181,7 @@ export class Dictionary implements OnInit, OnDestroy {
   onInput(event: Event) {
     const value = (event.target as HTMLInputElement).value;
     this.searchInput.set(value);
+    // Bump the request epoch so any pending completion for the previous value is stale.
     this.ghostEpoch++;
 
     const trimmed = value.trim();
@@ -186,6 +199,7 @@ export class Dictionary implements OnInit, OnDestroy {
 
   onKeyDown(event: KeyboardEvent) {
     if (event.key === 'Enter') this.lookup();
+    // Tab accepts the suggestion instead of moving focus when a completion exists.
     if (event.key === 'Tab' && this.ghostCompletion()) {
       event.preventDefault();
       this.acceptGhost();
@@ -199,6 +213,7 @@ export class Dictionary implements OnInit, OnDestroy {
     const word = this.searchInput().trim();
     if (!word) return;
 
+    this.isLoadingWordOfTheDay.set(false);
     this.router.navigate([], {
       queryParams: { word },
       queryParamsHandling: 'merge',
@@ -214,6 +229,7 @@ export class Dictionary implements OnInit, OnDestroy {
     this.lookup();
   }
 
+  /** Copies the suggested completion into the real input value. */
   acceptGhost() {
     if (this.ghostCompletion()) {
       this.searchInput.set(this.ghostCompletion());
@@ -221,6 +237,7 @@ export class Dictionary implements OnInit, OnDestroy {
     }
   }
 
+  /** Removes the overlay and its hint after editing, submission, or a failed suggestion. */
   private clearGhostText() {
     this.ghostCompletion.set('');
     this.ghostTyped.set('');
@@ -321,6 +338,7 @@ export class Dictionary implements OnInit, OnDestroy {
 
   private clearResult() {
     this.result.set(null);
+    this.isWordOfTheDay.set(false);
     this.notFound.set(null);
     this.notFoundQuery.set('');
     this.error.set(null);
@@ -331,9 +349,11 @@ export class Dictionary implements OnInit, OnDestroy {
    * Renders a successful lookup payload. Shared by HTTP lookups and the daily
    * word response, which already contains the full entry.
    */
-  private applyResult(payload: WordResponse, queryWord: string): void {
+  private applyResult(payload: WordResponse, queryWord: string, isWordOfTheDay = false): void {
     this.result.set(payload);
     this.isLoading.set(false);
+    this.isLoadingWordOfTheDay.set(false);
+    this.isWordOfTheDay.set(isWordOfTheDay);
 
     const canonical = this.storage.displayWord(payload.display_lemma || payload.query || queryWord);
     if (!canonical) return;

@@ -1,4 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <path fill="#fff" d="M53 5C37 7 22 15 14 28c-5 8-5 16-2 22l-7 8 3 3 8-8c6 3 14 2 22-4C51 38 57 22 59 7l-6-2Zm-3 8c-3 11-9 22-18 30-5 4-10 6-14 5l32-35ZM14 49c-1-5 1-11 5-17C27 21 38 15 49 12L14 49Z"/>
-  <path fill="none" stroke="#fff" stroke-linecap="round" stroke-width="2.5" d="m11 58 29-29"/>
+  <filter id="white-quill">
+    <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0" />
+  </filter>
+  <image href="/assets/quill.png" width="64" height="64" preserveAspectRatio="xMidYMid meet" filter="url(#white-quill)" />
 </svg>

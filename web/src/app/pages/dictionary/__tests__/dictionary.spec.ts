@@ -65,6 +65,9 @@ describe('Dictionary word of the day', () => {
     expect(dict.searchInput()).toBe('hello');
     expect(dict.getDefinitions()).toEqual(['[interjection] used as a greeting']);
     expect(dict.isLoading()).toBe(false);
+    expect(fixture.nativeElement.querySelector('.wotd-label')?.textContent.trim()).toBe(
+      'Word of the Day',
+    );
     // The WOTD payload already carries the entry, so a second lookup is unnecessary.
     expect(lookup).not.toHaveBeenCalled();
   });
@@ -75,6 +78,9 @@ describe('Dictionary word of the day', () => {
 
     expect(fixture.componentInstance.result()).toBeNull();
     expect(fixture.componentInstance.isLoading()).toBe(true);
+    expect(fixture.nativeElement.querySelector('.status').textContent).toContain(
+      'Looking up word of the day...',
+    );
 
     wotd.settle(HELLO_WORD);
     fixture.detectChanges();
@@ -90,8 +96,10 @@ describe('Dictionary word of the day', () => {
     fixture.detectChanges();
 
     fixture.componentInstance.searchWord('goodbye');
+    fixture.detectChanges();
 
     expect(lookup).toHaveBeenCalledWith('goodbye');
+    expect(fixture.nativeElement.querySelector('.wotd-label')).toBeNull();
   });
 
   it('leaves an explicit ?word= deep link alone', async () => {

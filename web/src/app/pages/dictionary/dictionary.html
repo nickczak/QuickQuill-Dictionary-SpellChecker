@@ -18,6 +18,7 @@
         (input)="onInput($event)"
         (keydown)="onKeyDown($event)"
       />
+      <!-- A visual-only overlay: the real input stays editable and keeps the caret. -->
       <div class="ghost-layer" aria-hidden="true">
         <span class="ghost-typed">{{ ghostTyped() }}</span
         ><span class="ghost-suffix">{{ ghostSuffix() }}</span>
@@ -27,7 +28,8 @@
 
   <div class="status">
     @if (isLoading()) {
-      <span class="spinner"></span> Looking up...
+      <span class="spinner"></span>
+      {{ isLoadingWordOfTheDay() ? 'Looking up word of the day...' : 'Looking up...' }}
     }
     <span>{{ statusMessage() }}</span>
     @if (showGhostHint() && ghostSuffix()) {
@@ -68,7 +70,12 @@
 
   @if (result()) {
     <div class="result-box has-results">
-      <h2 class="lemma">{{ formatLemma() }}</h2>
+      <div class="result-heading">
+        <h2 class="lemma">{{ formatLemma() }}</h2>
+        @if (isWordOfTheDay()) {
+          <span class="wotd-label">Word of the Day</span>
+        }
+      </div>
 
       @if (result()!.alternative_searches.length) {
         <div class="alternative-searches">

@@ -75,6 +75,7 @@
   z-index: 1;
 }
 
+/* Align this visual-only text over the transparent typed characters in the input. */
 .ghost-layer {
   position: absolute;
   left: 0;
@@ -90,10 +91,12 @@
   padding: 14px 13px;
 }
 
+/* The real input paints the typed value; hide its duplicate in the overlay. */
 .ghost-typed {
   color: transparent;
 }
 
+/* Only the suggested, not-yet-typed part is visible as ghost text. */
 .ghost-suffix {
   color: rgba(255, 255, 255, 0.35);
 }
@@ -177,9 +180,23 @@
   margin-bottom: 6px;
 }
 
+.result-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+}
+
 .lemma {
   font-size: 56px;
   margin: 0 0 0 -15px;
+}
+
+.wotd-label {
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
 }
 
 .empty {
