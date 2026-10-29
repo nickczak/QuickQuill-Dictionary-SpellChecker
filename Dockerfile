@@ -6,15 +6,11 @@
 # :8080. The Angular frontend is not part of this image — it is served from
 # Vercel.
 #
-# The dictionary itself is NOT committed to the repo (155MB): it is published
-# as GitHub release asset "dictionary-common.db" and pulled during the build,
-# then verified against a pinned SHA256. Bump DICTIONARY_DB_URL and
-# DICTIONARY_DB_SHA256 together when the database is updated.
-# Custom entries (QuickQuill, Nevermore Academy, ...) are added on top of the
-# downloaded dictionary by scripts/import_extras.py inside Stage 3.
-
-ARG DICTIONARY_DB_URL=https://github.com/nickczak/QuickQuill-Dictionary-SpellChecker/releases/download/dictionary-db-v1/dictionary-common.db
-ARG DICTIONARY_DB_SHA256=6c9958cd62311c863dcf362d1713950f75910c2f4f848dc1235c00708a7a7130
+# The full SQLite dictionary is rebuilt from Kaikki's compressed English
+# Wiktextract export. Pin its SHA256 so a changed upstream snapshot fails the
+# build until its checksum is reviewed and updated.
+ARG DICTIONARY_DATA_URL=https://kaikki.org/dictionary/English/kaikki.org-dictionary-English.jsonl.gz
+ARG DICTIONARY_DATA_SHA256=3ff7bef28ce7ad077ea55cedd9bde2cb7981c40f68adf63c8ceea347341392dc
 
 ### Stage 1: C++ engine build
 FROM debian:bookworm-slim AS engine-build
@@ -42,22 +38,23 @@ COPY studio/ ./
 COPY --from=engine-build /src/engine/build/src/libquickquill_engine.so /src/engine/build/src/libquickquill_engine.so
 RUN ./gradlew bootJar
 
-### Stage 3: download + verify the dictionary
+### Stage 3: download + build the dictionary
 FROM debian:bookworm-slim AS dictionary-download
-ARG DICTIONARY_DB_URL
-ARG DICTIONARY_DB_SHA256
+ARG DICTIONARY_DATA_URL
+ARG DICTIONARY_DATA_SHA256
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl python3 \
   && rm -rf /var/lib/apt/lists/*
-# Verify the pristine release asset first, then layer the custom QuickQuill
-# entries on top so the baked dictionary also serves those words.
+# Verify the official compressed source before importing it into SQLite.
 RUN mkdir -p /out \
-  && curl -fsSL "${DICTIONARY_DB_URL}" -o /out/dictionary.db \
-  && echo "${DICTIONARY_DB_SHA256}  /out/dictionary.db" | sha256sum -c -
+  && curl -fsSL "${DICTIONARY_DATA_URL}" -o /out/dictionary.jsonl.gz \
+  && echo "${DICTIONARY_DATA_SHA256}  /out/dictionary.jsonl.gz" | sha256sum -c -
+COPY scripts/import_kaikki.py /out/import_kaikki.py
 COPY scripts/import_extras.py /out/import_extras.py
-RUN python3 /out/import_extras.py --db /out/dictionary.db \
-  && rm /out/import_extras.py
-RUN python3 -c 'import sqlite3; expected={"nevermore","quickquill","lexiconlevissimum","nicholassobchak","sobchak","neilmartini","gwen"}; conn=sqlite3.connect("/out/dictionary.db"); actual={row[0] for row in conn.execute("SELECT lemma FROM words WHERE lemma IN (?,?,?,?,?,?,?)", tuple(expected))}; conn.close(); missing=expected-actual; assert not missing, f"dictionary extras missing after import: {sorted(missing)}"; print(f"verified {len(actual)} custom dictionary extras")'
+RUN python3 /out/import_kaikki.py --json /out/dictionary.jsonl.gz --db /out/dictionary.db \
+  && python3 /out/import_extras.py --db /out/dictionary.db \
+  && rm /out/import_kaikki.py /out/import_extras.py
+RUN python3 -c 'import sqlite3; conn=sqlite3.connect("/out/dictionary.db"); words=conn.execute("SELECT COUNT(*) FROM words").fetchone()[0]; senses=conn.execute("SELECT COUNT(*) FROM senses").fetchone()[0]; expected={"nevermore","quickquill","lexiconlevissimum","nicholassobchak","sobchak","neilmartini","gwen"}; actual={row[0] for row in conn.execute("SELECT lemma FROM words WHERE lemma IN (?,?,?,?,?,?,?)", tuple(expected))}; conn.close(); missing=expected-actual; assert words >= 1000000, f"dictionary unexpectedly small: {words} words"; assert senses > 0, "dictionary has no senses"; assert not missing, f"dictionary extras missing after import: {sorted(missing)}"; print(f"verified {words:,} words, {senses:,} senses, and {len(actual)} custom extras")'
 
 ### Stage 4: backend runtime image
 FROM eclipse-temurin:25-jre AS backend
@@ -65,10 +62,10 @@ WORKDIR /app
 
 COPY --from=backend-build /src/build/libs/*.jar ./app.jar
 COPY --from=engine-build /src/engine/build/src/libquickquill_engine.so ./libquickquill_engine.so
-# dictionary.db is downloaded from a GitHub release asset (see the
-# dictionary-download stage above), enriched with the custom words from
-# scripts/import_extras.py, and baked into the image, since Render's
-# free web services have no persistent disk. It is NOT committed to the repo.
+# dictionary.db is rebuilt from Kaikki's verified English export and
+# enriched with custom words in the dictionary-download stage above. It is
+# baked into the image because Render's free web services have no persistent
+# disk; the generated database is NOT committed to the repo.
 COPY --from=dictionary-download /out/dictionary.db ./dictionary.db
 
 EXPOSE 8080

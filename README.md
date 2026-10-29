@@ -26,7 +26,7 @@ QuickQuill is a full-stack dictionary and spell-check application. The core engi
     - Examples
     - Forms/inflections and etymology
 
-> **Note:** The production Docker image downloads and verifies the release dictionary before baking it into the Render image. The full database supports **over 1.28 million words** at the same speed — see the [analytics](#analytics) section below. The only words cut are obscure, obsolete word forms (rare plurals, scientific jargon, archaic inflections, etc.) — no common English vocabulary was removed.
+> **Note:** The production Docker image downloads and verifies Kaikki's compressed English Wiktextract export, then builds the SQLite dictionary into the Render image. The full database supports **over 1.28 million words** at the same speed — see the [analytics](#analytics) section below. The only words cut are obscure, obsolete word forms (rare plurals, scientific jargon, archaic inflections, etc.) — no common English vocabulary was removed.
 
 <p align="center"><img src="showcase-desktop.gif" alt="QuickQuill Showcase" width=800></p>
 

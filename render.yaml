@@ -18,12 +18,10 @@
 #     the service suspended (learned the hard way). Render marks the deploy
 #     Live once the port accepts connections; GET /api/health is available for
 #     manual probing.
-#   * Free web instances have no persistent disk, so dictionary.db is baked
-#     into the image. It is NOT committed to the repo: the Dockerfile pulls it
-#     from the GitHub release asset "dictionary-common.db" at build time,
-#     verifies its SHA256, and layers the custom entries from
-#     scripts/import_extras.py on top (see DICTIONARY_DB_URL /
-#     DICTIONARY_DB_SHA256 in the Dockerfile).
+#   * Free web instances have no persistent disk, so dictionary.db is built
+#     from Kaikki's compressed English Wiktextract export and baked into the
+#     image. The Dockerfile verifies the pinned source SHA256, imports the
+#     data, then adds custom entries from scripts/import_extras.py.
 #   * Neon is reached over its public TLS endpoint. Choose a nearby Neon
 #     region to limit latency from this Oregon web service.
 #   * CORS_ALLOWED_ORIGINS must be the exact browser origin of the site calling
