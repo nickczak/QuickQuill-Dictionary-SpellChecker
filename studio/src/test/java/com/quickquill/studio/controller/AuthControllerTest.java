@@ -5,14 +5,17 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.json.JsonMapper;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -25,16 +28,26 @@ public class AuthControllerTest {
     mockMvc
         .perform(
             post("/api/auth/signup")
-                .param("email", email)
-                .param("password", password)
-                .param("displayName", displayName))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    JsonMapper.builder()
+                        .build()
+                        .writeValueAsString(
+                            Map.of(
+                                "email", email, "password", password, "displayName", displayName))))
         .andExpect(status().isCreated());
   }
 
   private String loginAndExtractToken(String email, String password) throws Exception {
     String response =
         mockMvc
-            .perform(post("/api/auth/login").param("email", email).param("password", password))
+            .perform(
+                post("/api/auth/login")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        JsonMapper.builder()
+                            .build()
+                            .writeValueAsString(Map.of("email", email, "password", password))))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.token").isNotEmpty())
             .andReturn()
@@ -53,9 +66,18 @@ public class AuthControllerTest {
       mockMvc
           .perform(
               post("/api/auth/signup")
-                  .param("email", "test@test.com")
-                  .param("password", "pass123")
-                  .param("displayName", "Test User"))
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(
+                      JsonMapper.builder()
+                          .build()
+                          .writeValueAsString(
+                              Map.of(
+                                  "email",
+                                  "test@test.com",
+                                  "password",
+                                  "pass123",
+                                  "displayName",
+                                  "Test User"))))
           .andExpect(status().isCreated())
           .andExpect(jsonPath("$.token").isNotEmpty())
           .andExpect(jsonPath("$.user.email").value("test@test.com"))
@@ -70,16 +92,27 @@ public class AuthControllerTest {
       mockMvc
           .perform(
               post("/api/auth/signup")
-                  .param("email", "dup@test.com")
-                  .param("password", "pass456")
-                  .param("displayName", "Second"))
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(
+                      JsonMapper.builder()
+                          .build()
+                          .writeValueAsString(
+                              Map.of(
+                                  "email",
+                                  "dup@test.com",
+                                  "password",
+                                  "pass456",
+                                  "displayName",
+                                  "Second"))))
           .andExpect(status().isConflict())
           .andExpect(jsonPath("$.error").value("Email already registered."));
     }
 
     @Test
-    void shouldReturn400ForMissingParams() throws Exception {
-      mockMvc.perform(post("/api/auth/signup")).andExpect(status().isBadRequest());
+    void shouldReturn400ForMissingBody() throws Exception {
+      mockMvc
+          .perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON))
+          .andExpect(status().isBadRequest());
     }
   }
 
@@ -93,7 +126,13 @@ public class AuthControllerTest {
 
       mockMvc
           .perform(
-              post("/api/auth/login").param("email", "login@test.com").param("password", "pass123"))
+              post("/api/auth/login")
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(
+                      JsonMapper.builder()
+                          .build()
+                          .writeValueAsString(
+                              Map.of("email", "login@test.com", "password", "pass123"))))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.token").isNotEmpty())
           .andExpect(jsonPath("$.user.email").value("login@test.com"))
@@ -107,7 +146,13 @@ public class AuthControllerTest {
 
       mockMvc
           .perform(
-              post("/api/auth/login").param("email", "wrong@test.com").param("password", "bad"))
+              post("/api/auth/login")
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(
+                      JsonMapper.builder()
+                          .build()
+                          .writeValueAsString(
+                              Map.of("email", "wrong@test.com", "password", "bad"))))
           .andExpect(status().isUnauthorized())
           .andExpect(jsonPath("$.error").value("Invalid email or password."));
     }
@@ -116,7 +161,13 @@ public class AuthControllerTest {
     void shouldReturn401ForNonexistentEmail() throws Exception {
       mockMvc
           .perform(
-              post("/api/auth/login").param("email", "ghost@test.com").param("password", "pass123"))
+              post("/api/auth/login")
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(
+                      JsonMapper.builder()
+                          .build()
+                          .writeValueAsString(
+                              Map.of("email", "ghost@test.com", "password", "pass123"))))
           .andExpect(status().isUnauthorized())
           .andExpect(jsonPath("$.error").value("Invalid email or password."));
     }
@@ -183,21 +234,37 @@ public class AuthControllerTest {
               post("/api/auth/change-password")
                   .header(
                       "Authorization", "Bearer " + loginAndExtractToken("chg@test.com", "oldpass"))
-                  .param("oldPassword", "oldpass")
-                  .param("newPassword", "newpass"))
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(
+                      JsonMapper.builder()
+                          .build()
+                          .writeValueAsString(
+                              Map.of("oldPassword", "oldpass", "newPassword", "newpass"))))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.message").value("Password changed successfully."));
 
       // Old password should no longer work
       mockMvc
           .perform(
-              post("/api/auth/login").param("email", "chg@test.com").param("password", "oldpass"))
+              post("/api/auth/login")
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(
+                      JsonMapper.builder()
+                          .build()
+                          .writeValueAsString(
+                              Map.of("email", "chg@test.com", "password", "oldpass"))))
           .andExpect(status().isUnauthorized());
 
       // New password should work
       mockMvc
           .perform(
-              post("/api/auth/login").param("email", "chg@test.com").param("password", "newpass"))
+              post("/api/auth/login")
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(
+                      JsonMapper.builder()
+                          .build()
+                          .writeValueAsString(
+                              Map.of("email", "chg@test.com", "password", "newpass"))))
           .andExpect(status().isOk());
     }
 
@@ -211,8 +278,12 @@ public class AuthControllerTest {
                   .header(
                       "Authorization",
                       "Bearer " + loginAndExtractToken("chg2@test.com", "realpass"))
-                  .param("oldPassword", "wrongpass")
-                  .param("newPassword", "newpass"))
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(
+                      JsonMapper.builder()
+                          .build()
+                          .writeValueAsString(
+                              Map.of("oldPassword", "wrongpass", "newPassword", "newpass"))))
           .andExpect(status().isUnauthorized())
           .andExpect(jsonPath("$.error").value("Wrong password."));
     }
@@ -223,8 +294,11 @@ public class AuthControllerTest {
           .perform(
               post("/api/auth/change-password")
                   .header("Authorization", "Bearer bogus-token")
-                  .param("oldPassword", "old")
-                  .param("newPassword", "new"))
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(
+                      JsonMapper.builder()
+                          .build()
+                          .writeValueAsString(Map.of("oldPassword", "old", "newPassword", "new"))))
           .andExpect(status().isUnauthorized());
     }
   }
@@ -248,7 +322,13 @@ public class AuthControllerTest {
       // Account should no longer be loginable
       mockMvc
           .perform(
-              post("/api/auth/login").param("email", "del@test.com").param("password", "pass123"))
+              post("/api/auth/login")
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(
+                      JsonMapper.builder()
+                          .build()
+                          .writeValueAsString(
+                              Map.of("email", "del@test.com", "password", "pass123"))))
           .andExpect(status().isUnauthorized());
     }
 

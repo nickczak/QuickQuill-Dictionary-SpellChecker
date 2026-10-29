@@ -91,6 +91,10 @@ jobs:
           ./gradlew bootJar || { echo "First build attempt failed (likely Maven Central 403), retrying..."; sleep 30; ./gradlew bootJar; }
         working-directory: studio/
 
+      - name: Verify credential request security
+        run: ./gradlew test --tests 'com.quickquill.studio.controller.AuthRequestTest'
+        working-directory: studio/
+
   build-frontend:
     name: Build frontend
     runs-on: ubuntu-latest

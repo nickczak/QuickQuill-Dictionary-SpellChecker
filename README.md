@@ -138,6 +138,11 @@ docker compose up -d postgres
 
 This creates the `quickquill` database and user automatically.
 
+For production Postgres on Neon with the backend on Render, follow
+[the migration and connection guide](docs/neon-migration.md). It covers copying
+existing users and documents, updating Render's environment variables, and
+verifying the switch. The SQLite dictionary remains in the backend image.
+
 ### Code Formatting (Pre-commit Hook)
 To have consistent formatting across the project, configure `pre-commit`. It's a hook that automatically runs `clang-format` on your staged C++ files before each commit.
 
@@ -204,6 +209,21 @@ npm start
 
 ### Run Tests
 
+**Credential request regression tests (Java 25, no database or native engine required):**
+```bash
+cd studio
+./gradlew test --tests 'com.quickquill.studio.controller.AuthRequestTest'
+```
+
+These tests also run in CI. The complete backend suite (`./gradlew test`) uses
+the configured local PostgreSQL database and the built native engine.
+
+**Frontend tests:**
+```bash
+cd web
+npm run test:ci
+```
+
 **C++ tests (Catch2):**
 ```bash
 cmake --build engine/build 
@@ -223,34 +243,54 @@ cmake --build engine/build
 
 ### Authentication
 
-- `POST /api/auth/signup?email=&password=&displayName=` — Register, returns `{ token, user }` (opens a session immediately)
-- `POST /api/auth/login?email=&password=` — Login, returns `{ token, user }`
-- `POST /api/auth/logout?token=` — Logout
-- `POST /api/auth/refresh?token=` — Extend session expiry (+7 days)
-- `POST /api/auth/change-password?token=&oldPassword=&newPassword=` — Change password
-- `POST /api/auth/delete-account?token=` — Delete account and all dependent rows
-- `GET /api/auth/me?token=` — Current user info
+Credentials are accepted only as JSON (`Content-Type: application/json`). Query
+parameters and form bodies cannot authenticate. All authenticated endpoints use
+`Authorization: Bearer <session-token>`; never put passwords or tokens in URLs.
+Use HTTPS outside local development.
+
+| Method / path | JSON body | Result |
+| --- | --- | --- |
+| `POST /api/auth/signup` | `{ "email": "me@example.com", "password": "example-only", "displayName": "Me" }` | Opens a session and returns `{ token, user, message }` |
+| `POST /api/auth/login` | `{ "email": "me@example.com", "password": "example-only" }` | Returns `{ token, user, message }` |
+| `POST /api/auth/change-password` | `{ "oldPassword": "example-only", "newPassword": "replacement-example" }` | Changes the authenticated user's password |
+| `POST /api/auth/logout` | None | Ends the session |
+| `POST /api/auth/refresh` | None | Extends session expiry (+7 days) |
+| `POST /api/auth/delete-account` | None | Deletes the account and dependent rows |
+| `GET /api/auth/me` | None | Returns the current user's profile |
+
+Signup, login, and password changes reject missing, null, or blank fields with
+400 and non-JSON bodies with 415. Validation and malformed-JSON errors return a
+generic message without echoing submitted values. Credential objects redact their
+string representations; request-detail and SQL bind logging are disabled in the
+application configuration. Keep request/response body capture and Authorization
+header capture disabled in proxies, tracing, and external monitoring too.
+
+The Angular client sends JSON bodies for these three endpoints. Deploy the
+backend and frontend together when upgrading from the form-based API.
+
+`POST /api/auth/update` updates `displayName` and `email` as form fields and also
+requires the Bearer header.
 
 ### Lettre Documents (per-user)
 
-- `GET /api/documents?token=` — List the user's documents (most recently updated first)
-- `POST /api/documents?token=&title=` — Create a document (title defaults to "Untitled")
-- `GET /api/documents/{id}?token=` — Fetch one document with its content (404 if not owned by the user)
-- `PUT /api/documents/{id}?token=&content=` — Save document content
-- `POST /api/documents/{id}/rename?token=&title=` — Rename a document
-- `DELETE /api/documents/{id}?token=` — Delete a document
+- `GET /api/documents` — List the user's documents (most recently updated first)
+- `POST /api/documents?title=` — Create a document (title defaults to "Untitled")
+- `GET /api/documents/{id}` — Fetch one document with its content (404 if not owned by the user)
+- `PUT /api/documents/{id}?content=` — Save document content
+- `POST /api/documents/{id}/rename?title=` — Rename a document
+- `DELETE /api/documents/{id}` — Delete a document
 
 ### Search History (per-user)
 
-- `GET /api/search-history?token=` — List the user's search words (most recent first)
-- `POST /api/search-history?token=&word=` — Record a search
-- `DELETE /api/search-history?token=` — Clear the user's search history
+- `GET /api/search-history` — List the user's search words (most recent first)
+- `POST /api/search-history?word=` — Record a search
+- `DELETE /api/search-history` — Clear the user's search history
 
 ### Suggested Words (per-user)
 
-- `GET /api/suggested-words?token=` — List the user's suggested words (most recent first)
-- `POST /api/suggested-words/sync?token=&word=a&word=b` — Record many words at once (stored synonyms)
-- `DELETE /api/suggested-words?token=` — Clear the user's suggested words
+- `GET /api/suggested-words` — List the user's suggested words (most recent first)
+- `POST /api/suggested-words/sync?word=a&word=b` — Record many words at once (stored synonyms)
+- `DELETE /api/suggested-words` — Clear the user's suggested words
 
 Response shape for `/api/word/<word>`:
 ```json

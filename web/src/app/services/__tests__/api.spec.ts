@@ -150,10 +150,12 @@ describe('Api', () => {
       const promise = firstValueFrom(api.signup('me@test.com', 'raven1', 'Me'));
 
       const req = httpMock.expectOne('/api/auth/signup');
+      expect(req.request.params.keys()).toEqual([]);
+      expect(req.request.detectContentTypeHeader()).toBe('application/json');
       expect(req.request.method).toBe('POST');
-      expect(req.request.body.get('email')).toBe('me@test.com');
-      expect(req.request.body.get('password')).toBe('raven1');
-      expect(req.request.body.get('displayName')).toBe('Me');
+      expect(req.request.body.email).toBe('me@test.com');
+      expect(req.request.body.password).toBe('raven1');
+      expect(req.request.body.displayName).toBe('Me');
       req.flush(TEST_SESSION);
 
       expect(await promise).toEqual(TEST_SESSION);
@@ -163,9 +165,11 @@ describe('Api', () => {
       const promise = firstValueFrom(api.login('me@test.com', 'raven1'));
 
       const req = httpMock.expectOne('/api/auth/login');
+      expect(req.request.params.keys()).toEqual([]);
+      expect(req.request.detectContentTypeHeader()).toBe('application/json');
       expect(req.request.method).toBe('POST');
-      expect(req.request.body.get('email')).toBe('me@test.com');
-      expect(req.request.body.get('password')).toBe('raven1');
+      expect(req.request.body.email).toBe('me@test.com');
+      expect(req.request.body.password).toBe('raven1');
       req.flush(TEST_SESSION);
 
       expect(await promise).toEqual(TEST_SESSION);
@@ -225,11 +229,13 @@ describe('Api', () => {
       const promise = firstValueFrom(api.changePassword('t0ken', 'oldpassword', 'newpassword'));
 
       const req = httpMock.expectOne('/api/auth/change-password');
+      expect(req.request.params.keys()).toEqual([]);
+      expect(req.request.detectContentTypeHeader()).toBe('application/json');
       expect(req.request.method).toBe('POST');
       expectAuth(req);
-      expect(req.request.body.get('oldPassword')).toBe('oldpassword');
-      expect(req.request.body.get('newPassword')).toBe('newpassword');
-      expect(req.request.body.get('token')).toBeNull();
+      expect(req.request.body.oldPassword).toBe('oldpassword');
+      expect(req.request.body.newPassword).toBe('newpassword');
+      expect(req.request.body.token).toBeUndefined();
       req.flush({ message: 'Password changed successfully.' });
 
       expect((await promise).message).toBe('Password changed successfully.');

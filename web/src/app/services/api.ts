@@ -96,17 +96,14 @@ export class Api {
   private static readonly WORD_OF_DAY_TIMEOUT_MS = 70000;
 
   signup(email: string, password: string, displayName: string): Observable<AuthResponse> {
-    const body = new HttpParams()
-      .set('email', email)
-      .set('password', password)
-      .set('displayName', displayName);
+    const body = { email, password, displayName };
     return this.http
       .post<AuthResponse>(endpoint('/api/auth/signup'), body)
       .pipe(timeout(Api.AUTH_TIMEOUT_MS)); // add timeout to prevent hanging
   }
 
   login(email: string, password: string): Observable<AuthResponse> {
-    const body = new HttpParams().set('email', email).set('password', password);
+    const body = { email, password };
     return this.http
       .post<AuthResponse>(endpoint('/api/auth/login'), body)
       .pipe(timeout(Api.AUTH_TIMEOUT_MS));
@@ -129,7 +126,7 @@ export class Api {
     oldPassword: string,
     newPassword: string,
   ): Observable<{ message: string }> {
-    const body = new HttpParams().set('oldPassword', oldPassword).set('newPassword', newPassword);
+    const body = { oldPassword, newPassword };
     return this.http
       .post<{ message: string }>(endpoint('/api/auth/change-password'), body, {
         headers: Api.auth(token),

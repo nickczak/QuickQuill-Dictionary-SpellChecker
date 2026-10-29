@@ -10,14 +10,17 @@ import com.quickquill.studio.model.SearchHistory;
 import com.quickquill.studio.model.User;
 import com.quickquill.studio.repository.SearchHistoryRepository;
 import com.quickquill.studio.service.AuthService;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.json.JsonMapper;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -36,16 +39,25 @@ public class SearchHistoryControllerTest {
     mockMvc
         .perform(
             post("/api/auth/signup")
-                .param("email", email)
-                .param("password", password)
-                .param("displayName", email))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    JsonMapper.builder()
+                        .build()
+                        .writeValueAsString(
+                            Map.of("email", email, "password", password, "displayName", email))))
         .andExpect(status().isCreated());
   }
 
   private String loginAndExtractToken(String email, String password) throws Exception {
     String response =
         mockMvc
-            .perform(post("/api/auth/login").param("email", email).param("password", password))
+            .perform(
+                post("/api/auth/login")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        JsonMapper.builder()
+                            .build()
+                            .writeValueAsString(Map.of("email", email, "password", password))))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.token").isNotEmpty())
             .andReturn()
@@ -160,7 +172,7 @@ public class SearchHistoryControllerTest {
     }
 
     @Test
-    void shouldReturn400ForMissingParams() throws Exception {
+    void shouldReturn400ForMissingBody() throws Exception {
       mockMvc.perform(post("/api/search-history")).andExpect(status().isBadRequest());
     }
   }

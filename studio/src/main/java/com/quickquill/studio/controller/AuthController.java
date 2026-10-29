@@ -4,6 +4,8 @@ import com.quickquill.studio.config.AuthToken;
 import com.quickquill.studio.model.Session;
 import com.quickquill.studio.model.User;
 import com.quickquill.studio.service.AuthService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +15,28 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/auth")
 public class AuthController {
 
+  public record SignupRequest(
+      @NotBlank String email, @NotBlank String password, @NotBlank String displayName) {
+    @Override
+    public String toString() {
+      return "SignupRequest[REDACTED]";
+    }
+  }
+
+  public record LoginRequest(@NotBlank String email, @NotBlank String password) {
+    @Override
+    public String toString() {
+      return "LoginRequest[REDACTED]";
+    }
+  }
+
+  public record ChangePasswordRequest(@NotBlank String oldPassword, @NotBlank String newPassword) {
+    @Override
+    public String toString() {
+      return "ChangePasswordRequest[REDACTED]";
+    }
+  }
+
   private final AuthService authService;
 
   public AuthController(AuthService authService) {
@@ -20,19 +44,19 @@ public class AuthController {
   }
 
   /** Registers a user and returns a session token so the client can skip a second login call. */
-  @PostMapping("/signup")
+  @PostMapping(value = "/signup", consumes = "application/json")
   // IllegalArgumentException (duplicate email) → GlobalExceptionHandler → 409
-  public ResponseEntity<?> signup(
-      @RequestParam String email, @RequestParam String password, @RequestParam String displayName) {
-    Session session = authService.signup(email, password, displayName);
+  public ResponseEntity<?> signup(@Valid @RequestBody SignupRequest request) {
+    Session session =
+        authService.signup(request.email(), request.password(), request.displayName());
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(sessionResponse(session, "User registered successfully."));
   }
 
-  @PostMapping("/login")
+  @PostMapping(value = "/login", consumes = "application/json")
   // IllegalArgumentException (bad credentials) → GlobalExceptionHandler → 401
-  public ResponseEntity<?> login(@RequestParam String email, @RequestParam String password) {
-    Session session = authService.login(email, password);
+  public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
+    Session session = authService.login(request.email(), request.password());
     return ResponseEntity.ok(sessionResponse(session, "User logged in successfully."));
   }
 
@@ -50,13 +74,13 @@ public class AuthController {
     return ResponseEntity.ok(sessionResponse(session, "Session refreshed."));
   }
 
-  @PostMapping("/change-password")
+  @PostMapping(value = "/change-password", consumes = "application/json")
   // IllegalArgumentException (wrong password / invalid token) → GlobalExceptionHandler → 401
   public ResponseEntity<?> changePassword(
       @RequestHeader("Authorization") String authorization,
-      @RequestParam String oldPassword,
-      @RequestParam String newPassword) {
-    authService.changePassword(AuthToken.fromHeader(authorization), oldPassword, newPassword);
+      @Valid @RequestBody ChangePasswordRequest request) {
+    authService.changePassword(
+        AuthToken.fromHeader(authorization), request.oldPassword(), request.newPassword());
     return ResponseEntity.ok(Map.of("message", "Password changed successfully."));
   }
 
