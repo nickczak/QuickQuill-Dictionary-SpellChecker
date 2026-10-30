@@ -6,9 +6,9 @@
 # :8080. The Angular frontend is not part of this image — it is served from
 # Vercel.
 #
-# The full SQLite dictionary is rebuilt from Kaikki's compressed English
-# Wiktextract export. Pin its SHA256 so a changed upstream snapshot fails the
-# build until its checksum is reviewed and updated.
+# A bounded slice of the English dictionary is rebuilt from Kaikki's compressed
+# Wiktextract export to fit Render's 512 MiB free instance. Pin its SHA256 so a
+# changed upstream snapshot fails the build until its checksum is reviewed.
 ARG DICTIONARY_DATA_URL=https://kaikki.org/dictionary/English/kaikki.org-dictionary-English.jsonl.gz
 ARG DICTIONARY_DATA_SHA256=3ff7bef28ce7ad077ea55cedd9bde2cb7981c40f68adf63c8ceea347341392dc
 
@@ -51,10 +51,10 @@ RUN mkdir -p /out \
   && echo "${DICTIONARY_DATA_SHA256}  /out/dictionary.jsonl.gz" | sha256sum -c -
 COPY scripts/import_kaikki.py /out/import_kaikki.py
 COPY scripts/import_extras.py /out/import_extras.py
-RUN python3 /out/import_kaikki.py --json /out/dictionary.jsonl.gz --db /out/dictionary.db \
+RUN python3 /out/import_kaikki.py --json /out/dictionary.jsonl.gz --db /out/dictionary.db --max-entries 50000 --progress 5000 \
   && python3 /out/import_extras.py --db /out/dictionary.db \
-  && rm /out/import_kaikki.py /out/import_extras.py
-RUN python3 -c 'import sqlite3; conn=sqlite3.connect("/out/dictionary.db"); words=conn.execute("SELECT COUNT(*) FROM words").fetchone()[0]; senses=conn.execute("SELECT COUNT(*) FROM senses").fetchone()[0]; expected={"nevermore","quickquill","lexiconlevissimum","nicholassobchak","sobchak","neilmartini","gwen"}; actual={row[0] for row in conn.execute("SELECT lemma FROM words WHERE lemma IN (?,?,?,?,?,?,?)", tuple(expected))}; conn.close(); missing=expected-actual; assert words >= 1000000, f"dictionary unexpectedly small: {words} words"; assert senses > 0, "dictionary has no senses"; assert not missing, f"dictionary extras missing after import: {sorted(missing)}"; print(f"verified {words:,} words, {senses:,} senses, and {len(actual)} custom extras")'
+  && rm /out/import_kaikki.py /out/import_extras.py /out/dictionary.jsonl.gz
+RUN python3 -c 'import sqlite3; conn=sqlite3.connect("/out/dictionary.db"); words=conn.execute("SELECT COUNT(*) FROM words").fetchone()[0]; senses=conn.execute("SELECT COUNT(*) FROM senses").fetchone()[0]; expected={"nevermore","quickquill","lexiconlevissimum","nicholassobchak","sobchak","neilmartini","gwen"}; actual={row[0] for row in conn.execute("SELECT lemma FROM words WHERE lemma IN (?,?,?,?,?,?,?)", tuple(expected))}; conn.close(); missing=expected-actual; assert words >= 25000, f"dictionary unexpectedly small: {words} words"; assert senses > 0, "dictionary has no senses"; assert not missing, f"dictionary extras missing after import: {sorted(missing)}"; print(f"verified {words:,} words, {senses:,} senses, and {len(actual)} custom extras")'
 
 ### Stage 4: backend runtime image
 FROM eclipse-temurin:25-jre AS backend
